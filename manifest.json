@@ -1,0 +1,16 @@
+{
+  "short_name": "SplitEase",
+  "name": "SplitEase - AI Expense Splitter",
+  "description": "Scan receipts with AI to split group expenses, hassle-free.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0ea5e9",
+  "background_color": "#f8fafc"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "SplitEase - AI Expense Splitter",
+  "description": "A web application to track shared expenses among a group of friends. Users can upload receipt images, and AI will automatically extract the total to make logging expenses and settling debts easier.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "prompt": ""
+}
