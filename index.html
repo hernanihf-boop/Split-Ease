@@ -1,17 +1,39 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>SplitEase - AI Expense Splitter</title>
+    
+    <!-- iOS support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SplitEase">
+    <link rel="apple-touch-icon" href="/icon.svg">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0ea5e9">
     <style>
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sar: env(safe-area-inset-right);
+        --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+      }
       body {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        /* Padding para evitar que el contenido quede bajo el notch o la barra de inicio en iOS */
+        padding-top: var(--sat);
+        padding-bottom: var(--sab);
+        padding-left: var(--sal);
+        padding-right: var(--sar);
+      }
+      /* Estilo para que se sienta más fluido en móviles */
+      * {
+        -webkit-tap-highlight-color: transparent;
       }
     </style>
   <script type="importmap">
@@ -27,16 +49,16 @@
 }
 </script>
 </head>
-  <body class="bg-slate-50 dark:bg-slate-900">
+  <body class="bg-slate-50 dark:bg-slate-900 min-h-screen">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            console.log('ServiceWorker registrado con éxito');
           }, err => {
-            console.log('ServiceWorker registration failed: ', err);
+            console.log('Fallo en el registro del ServiceWorker: ', err);
           });
         });
       }

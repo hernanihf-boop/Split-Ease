@@ -1,91 +1,63 @@
-const CACHE_NAME = 'splitease-cache-v3'; // Version bumped to trigger update
+const CACHE_NAME = 'splitease-cache-v4';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
-  '/index.tsx',
-  '/App.tsx',
-  '/types.ts',
-  '/components/UserManagement.tsx',
-  '/components/ExpenseForm.tsx',
-  '/components/ExpenseList.tsx',
-  '/components/Summary.tsx',
-  '/components/icons.tsx',
   '/manifest.json',
   '/icon.svg',
-  'https://cdn.tailwindcss.com',
-  'https://esm.sh/react@^19.1.0',
-  'https://esm.sh/react-dom@^19.1.0/client',
-  'https://esm.sh/react@^19.1.0/jsx-runtime',
-  'https://esm.sh/xlsx'
+  'https://cdn.tailwindcss.com'
 ];
 
-// Install the service worker and cache all the app's shell resources.
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache and caching app shell');
-        return cache.addAll(URLS_TO_CACHE);
-      })
-      .catch(error => {
-        console.error('Failed to cache assets during install:', error);
-      })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE))
   );
+  self.skipWaiting();
 });
 
-// Intercept fetch requests and serve from cache if available.
-// If not in cache, fetch from network, cache the response, and then return it.
-self.addEventListener('fetch', event => {
-  // We only want to handle GET requests.
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request)
-      .then(cachedResponse => {
-        // If the resource is in the cache, return it.
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-
-        // If the resource is not in the cache, fetch it from the network.
-        return fetch(event.request).then(
-          networkResponse => {
-            // Check if we received a valid response.
-            // We can cache successful responses (status 200-299).
-            if (networkResponse && networkResponse.ok) {
-              // Clone the response because it's a stream and can only be consumed once.
-              const responseToCache = networkResponse.clone();
-              caches.open(CACHE_NAME)
-                .then(cache => {
-                  cache.put(event.request, responseToCache);
-                });
-            }
-            return networkResponse;
-          }
-        ).catch(error => {
-            console.error('Fetch failed; resource not available offline.', error);
-            // This will be triggered if the network fails when offline.
-            // Since we already checked the cache, this means the resource is not available.
-        });
-      })
-  );
-});
-
-// Clean up old caches when a new service worker is activated.
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            console.log('Deleting old cache:', cacheName);
+          if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
         })
       );
+    })
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  
+  // No cachear las llamadas a la API de Netlify/Gemini
+  if (event.request.url.includes('/.netlify/functions/')) {
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then(response => {
+      return response || fetch(event.request).then(fetchResponse => {
+        // Solo cachear recursos estáticos conocidos o de confianza
+        if (fetchResponse.ok && (
+            event.request.url.startsWith(self.location.origin) || 
+            event.request.url.includes('cdn.tailwindcss.com') ||
+            event.request.url.includes('esm.sh')
+        )) {
+          const responseToCache = fetchResponse.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return fetchResponse;
+      });
+    }).catch(() => {
+      // Si falla todo y es una navegación de página, mostrar la raíz (offline support)
+      if (event.request.mode === 'navigate') {
+        return caches.match('/');
+      }
     })
   );
 });

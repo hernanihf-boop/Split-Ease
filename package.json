@@ -1,12 +1,16 @@
+
 {
-  "name": "splitease-serverless",
+  "name": "splitease",
   "version": "1.0.0",
-  "description": "Serverless functions for SplitEase",
+  "description": "SplitEase - AI Expense Splitter",
   "dependencies": {
-    "@google/genai": "^0.18.0",
-    "@netlify/functions": "^2.8.1"
+    "@google/genai": "^1.8.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@vercel/node": "^3.0.0",
     "typescript": "^5.4.5"
   }
 }
