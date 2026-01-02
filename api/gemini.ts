@@ -58,7 +58,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ text: response.text });
   } catch (error: any) {
-    console.error('Error en Gemini Vercel Function:', error);
+    console.error('Error in Gemini Vercel Function:', error);
     return res.status(500).json({ error: error.message || 'Error processing receipt.' });
   }
 }

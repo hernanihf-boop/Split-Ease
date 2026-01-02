@@ -69,7 +69,7 @@ const handler: Handler = async (event: HandlerEvent) => {
       body: JSON.stringify({ text: response.text }),
     };
   } catch (error: any) {
-    console.error('Error en Gemini Netlify Function:', error);
+    console.error('Error in Gemini Netlify Function:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message || 'Error processing receipt.' }),

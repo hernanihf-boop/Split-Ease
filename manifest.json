@@ -1,7 +1,8 @@
+
 {
   "short_name": "SplitEase",
   "name": "SplitEase - AI Expense Splitter",
-  "description": "Escanea recibos con IA para dividir gastos grupales sin complicaciones.",
+  "description": "Scan receipts with AI to split group expenses without complications.",
   "icons": [
     {
       "src": "/icon.svg",

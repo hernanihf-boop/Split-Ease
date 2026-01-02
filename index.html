@@ -1,5 +1,6 @@
+
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
@@ -49,13 +50,12 @@
 </head>
   <body class="bg-slate-50 dark:bg-slate-900 min-h-screen">
     <div id="root"></div>
-    <!-- Vite se encargará de resolver esta ruta durante el build -->
     <script type="module" src="/index.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('ServiceWorker registrado');
+            console.log('ServiceWorker registered');
           }).catch(err => {
             console.log('SW error: ', err);
           });
