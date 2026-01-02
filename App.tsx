@@ -23,20 +23,6 @@ const App: React.FC = () => {
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const [aiDiagnostic, setAiDiagnostic] = useState<string | null>(null);
 
-  // Helper to get the full API Key for debugging
-  const getFullKey = () => {
-    try {
-      const key = process.env.API_KEY;
-      if (key === undefined) return "[undefined]";
-      if (key === null) return "[null]";
-      if (key.trim() === "") return "[Vacia/String vacio]";
-      if (key === "YOUR_API_KEY") return "[Valor por defecto: YOUR_API_KEY]";
-      return key; // Mostrar entera como pidió el usuario
-    } catch (e) {
-      return "[Error accediendo a process.env]";
-    }
-  };
-
   const checkAI = useCallback(async () => {
     setAiStatus('checking');
     setAiDiagnostic(null);
@@ -199,14 +185,7 @@ const App: React.FC = () => {
         </main>
         
         <footer className="flex flex-col items-center justify-center gap-3 pt-12 pb-8">
-          <div className="flex flex-col items-center gap-2 w-full max-w-xs">
-            <div className="bg-slate-200 dark:bg-slate-800 p-2 rounded-lg border border-slate-300 dark:border-slate-700 w-full overflow-hidden">
-                <p className="text-[8px] uppercase font-bold text-slate-500 dark:text-slate-400 mb-1">Detected API Key:</p>
-                <code className="text-[10px] text-slate-600 dark:text-slate-300 font-mono break-all whitespace-normal block leading-tight">
-                {getFullKey()}
-                </code>
-            </div>
-            
+          <div className="flex flex-col items-center gap-2">
             <div className="flex items-center gap-3">
               {aiStatus === 'checking' && (
                 <span className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-slate-200/50 dark:bg-slate-800/50 px-3 py-1 rounded-full animate-pulse border border-slate-200 dark:border-slate-700">

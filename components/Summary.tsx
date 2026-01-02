@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { User, Expense, Settlement } from '../types.ts';
@@ -158,7 +159,7 @@ const Summary: React.FC<SummaryProps> = ({ users, expenses }) => {
   return (
     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-white">How to Settle Up</h2>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white">How to Settle Up</h2>
             <button 
                 onClick={handleDownloadXLSX}
                 disabled={expenses.length === 0}
