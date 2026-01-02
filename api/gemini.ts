@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -27,14 +27,32 @@ export default async function handler(req: any, res: any) {
     };
     
     const textPart = {
-      text: "Analyze the receipt and provide a JSON object with: 'merchantName' (string), 'transactionDate' (string in 'YYYY-MM-DD' format), and 'totalAmount' (number). Return only the JSON."
+      text: "Analyze this receipt image and extract the merchant name, the total transaction amount, and the date of the transaction."
     };
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ parts: [imagePart, textPart] }],
+      contents: { parts: [imagePart, textPart] },
       config: {
         responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            merchantName: {
+              type: Type.STRING,
+              description: "The name of the store or restaurant.",
+            },
+            transactionDate: {
+              type: Type.STRING,
+              description: "The date of the purchase in YYYY-MM-DD format.",
+            },
+            totalAmount: {
+              type: Type.NUMBER,
+              description: "The final total amount shown on the receipt.",
+            },
+          },
+          required: ["merchantName", "totalAmount"],
+        },
       },
     });
 

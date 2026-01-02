@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Expense } from '../types.ts';
-import { CameraIcon, TrashIcon, SparklesIcon, PencilIcon } from './icons.tsx';
+import { CameraIcon, TrashIcon, SparklesIcon, PencilIcon, PhotographIcon } from './icons.tsx';
+import { GoogleGenAI, Type } from "@google/genai";
 
 interface ExpenseFormProps {
   users: User[];
@@ -20,7 +21,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
   const [aiError, setAiError] = useState<string | null>(null);
   const [extractedTransactionDate, setExtractedTransactionDate] = useState('');
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (users.length > 0 && !paidById) {
@@ -28,7 +30,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
     }
   }, [users, paidById]);
 
-  // Si entra en modo manual o escaneado, por defecto todos participan
   useEffect(() => {
     if ((receiptImage || isManualMode) && participantIds.length === 0) {
       setParticipantIds(users.map(u => u.id));
@@ -45,9 +46,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
     setAiIsLoading(false);
     setAiError(null);
     setExtractedTransactionDate('');
-    if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-    }
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+    
     if (users.length > 0) {
         setPaidById(users[0].id);
     }
@@ -74,41 +75,60 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
   const processImageWithAI = async (base64ImageWithMime: string, mimeType: string) => {
     setAiIsLoading(true);
     setAiError(null);
+    
     try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const base64Data = base64ImageWithMime.split(',')[1];
-      const payload = {
-        base64Image: base64Data,
-        mimeType: mimeType,
-      };
 
-      let apiResponse = await fetch('/api/gemini', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+              },
+            },
+            {
+              text: "Analiza este recibo y extrae: el nombre del comercio (merchantName), el monto total (totalAmount) y la fecha (transactionDate en formato YYYY-MM-DD).",
+            },
+          ],
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              merchantName: { type: Type.STRING },
+              totalAmount: { type: Type.NUMBER },
+              transactionDate: { type: Type.STRING },
+            },
+            required: ["merchantName", "totalAmount"],
+          },
+        },
       });
 
-      if (apiResponse.status === 404) {
-          apiResponse = await fetch('/.netlify/functions/gemini', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-          });
-      }
-
-      const result = await apiResponse.json();
-      if (!apiResponse.ok) throw new Error(result.error || 'Error en IA');
+      const resultText = response.text;
+      if (!resultText) throw new Error("No se recibió respuesta de la IA");
       
-      const contentToParse = result.text.trim().replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsedData = JSON.parse(contentToParse);
+      const parsedData = JSON.parse(resultText);
       
-      setDescription(parsedData.merchantName || '');
+      setDescription(parsedData.merchantName || 'Gasto nuevo');
       setAmount(parsedData.totalAmount ? Number(parsedData.totalAmount).toFixed(2) : '');
+      
       if (parsedData.transactionDate) {
           const d = new Date(parsedData.transactionDate);
-          if (!isNaN(d.getTime())) setExtractedTransactionDate(d.toISOString());
+          if (!isNaN(d.getTime())) {
+            setExtractedTransactionDate(d.toISOString());
+          }
+      } else {
+        setExtractedTransactionDate(new Date().toISOString());
       }
     } catch (err: any) {
-      setAiError("No se pudo procesar el recibo automáticamente.");
+      console.error("AI Direct Call Error:", err);
+      setAiError("No se pudo extraer la información automáticamente. Por favor, completa los datos manualmente.");
+      setIsManualMode(true);
     } finally {
       setAiIsLoading(false);
     }
@@ -117,7 +137,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
-    if (!description || !parsedAmount || participantIds.length === 0) {
+    if (!description || isNaN(parsedAmount) || participantIds.length === 0) {
       setFormError('Completa todos los campos obligatorios.');
       return;
     }
@@ -148,24 +168,52 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
             </h2>
           </div>
           
-          <div className="space-y-4">
-            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="receipt-upload" />
-            <label htmlFor="receipt-upload" className="cursor-pointer w-full flex flex-col justify-center items-center px-6 py-10 border-2 border-slate-300 dark:border-slate-600 border-dashed rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-all active:scale-[0.98]">
-                <CameraIcon className="w-12 h-12 mb-3 text-sky-500" />
-                <span className="font-bold text-lg text-sky-600">Escanear Recibo</span>
-                <p className="text-xs mt-2 text-slate-400">Extracción automática con IA</p>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            {/* Cámara Input */}
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment" 
+              ref={cameraInputRef} 
+              onChange={handleFileChange} 
+              className="hidden" 
+              id="camera-upload" 
+            />
+            <label 
+              htmlFor="camera-upload" 
+              className="cursor-pointer flex flex-col justify-center items-center p-6 border-2 border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-900/50 hover:bg-sky-50 dark:hover:bg-sky-900/10 hover:border-sky-300 transition-all active:scale-95 group"
+            >
+                <CameraIcon className="w-10 h-10 mb-2 text-sky-500 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Cámara</span>
             </label>
 
-            <button 
-              onClick={() => setIsManualMode(true)}
-              className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all active:scale-[0.98]"
+            {/* Galería Input */}
+            <input 
+              type="file" 
+              accept="image/*" 
+              ref={galleryInputRef} 
+              onChange={handleFileChange} 
+              className="hidden" 
+              id="gallery-upload" 
+            />
+            <label 
+              htmlFor="gallery-upload" 
+              className="cursor-pointer flex flex-col justify-center items-center p-6 border-2 border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-900/50 hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:border-violet-300 transition-all active:scale-95 group"
             >
-              <PencilIcon className="w-5 h-5 text-slate-400" />
-              Ingreso Manual
-            </button>
+                <PhotographIcon className="w-10 h-10 mb-2 text-violet-500 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Galería</span>
+            </label>
           </div>
+
+          <button 
+            onClick={() => setIsManualMode(true)}
+            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all active:scale-[0.98]"
+          >
+            <PencilIcon className="w-5 h-5 text-slate-400" />
+            Ingreso Manual
+          </button>
           
-          {aiError && <p className="mt-4 text-red-500 text-xs text-center">{aiError}</p>}
+          {aiError && <p className="mt-4 text-red-500 text-xs text-center font-medium bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">{aiError}</p>}
         </>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -185,7 +233,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
                 {aiIsLoading && (
                   <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center rounded-xl text-white font-bold backdrop-blur-[2px]">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
-                    Analizando...
+                    <span className="mt-2 text-sm">Escaneando con IA...</span>
                   </div>
                 )}
             </div>
@@ -199,8 +247,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
                 value={description} 
                 onChange={(e) => setDescription(e.target.value)} 
                 placeholder="Ej: Starbucks, Cena Grupal..." 
-                className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
+                className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all disabled:opacity-50" 
                 required 
+                disabled={aiIsLoading}
               />
             </div>
             
@@ -213,8 +262,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
                   onChange={(e) => setAmount(e.target.value)} 
                   placeholder="0.00" 
                   step="0.01" 
-                  className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all" 
+                  className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all disabled:opacity-50" 
                   required 
+                  disabled={aiIsLoading}
                 />
               </div>
               <div>
@@ -222,7 +272,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
                 <select 
                   value={paidById} 
                   onChange={(e) => setPaidById(e.target.value)} 
-                  className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all"
+                  className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all disabled:opacity-50"
+                  disabled={aiIsLoading}
                 >
                   {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
@@ -238,6 +289,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
                     <button
                       key={user.id}
                       type="button"
+                      disabled={aiIsLoading}
                       onClick={() => {
                         setParticipantIds(prev => 
                           isChecked ? prev.filter(id => id !== user.id) : [...prev, user.id]
@@ -247,7 +299,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
                         isChecked 
                         ? 'bg-sky-500 text-white border-sky-500 shadow-sm' 
                         : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-600'
-                      }`}
+                      } ${aiIsLoading ? 'opacity-50' : ''}`}
                     >
                       {user.name}
                     </button>
@@ -257,22 +309,22 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
             </div>
           </div>
 
-          {formError && <p className="text-red-500 text-sm text-center">{formError}</p>}
+          {formError && <p className="text-red-500 text-sm text-center font-bold">{formError}</p>}
           
           <div className="flex flex-col gap-2 pt-2">
             <button 
               type="submit" 
-              className="w-full py-4 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-colors active:scale-95 disabled:opacity-50" 
+              className="w-full py-4 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" 
               disabled={aiIsLoading}
             >
-              Confirmar Gasto
+              {aiIsLoading ? 'Extrayendo...' : 'Confirmar Gasto'}
             </button>
             <button 
               type="button" 
               onClick={resetFormState} 
               className="w-full py-2 text-slate-400 text-sm hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
             >
-              Volver
+              Cancelar
             </button>
           </div>
         </form>

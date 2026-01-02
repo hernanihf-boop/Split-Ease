@@ -1,4 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+
+import { GoogleGenAI, Type } from "@google/genai";
 import type { Handler, HandlerEvent } from "@netlify/functions";
 
 if (!process.env.API_KEY) {
@@ -33,15 +34,32 @@ const handler: Handler = async (event: HandlerEvent) => {
     };
     
     const textPart = {
-      text: "Analyze the receipt and provide a JSON object with: 'merchantName' (string), 'transactionDate' (string in 'YYYY-MM-DD' format), and 'totalAmount' (number). Return only the JSON."
+      text: "Analyze this receipt image and extract the merchant name, the total transaction amount, and the date of the transaction. If you cannot find a piece of information, return an empty string for text or 0 for amount."
     };
 
-    // Usando el modelo recomendado gemini-3-flash-preview para mayor velocidad y precisión
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ parts: [imagePart, textPart] }],
+      contents: { parts: [imagePart, textPart] },
       config: {
         responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            merchantName: {
+              type: Type.STRING,
+              description: "The name of the store or restaurant.",
+            },
+            transactionDate: {
+              type: Type.STRING,
+              description: "The date of the purchase in YYYY-MM-DD format.",
+            },
+            totalAmount: {
+              type: Type.NUMBER,
+              description: "The final total amount shown on the receipt.",
+            },
+          },
+          required: ["merchantName", "totalAmount"],
+        },
       },
     });
 
@@ -51,7 +69,7 @@ const handler: Handler = async (event: HandlerEvent) => {
       body: JSON.stringify({ text: response.text }),
     };
   } catch (error: any) {
-    console.error('Error en Gemini Function:', error);
+    console.error('Error en Gemini Netlify Function:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message || 'Error processing receipt.' }),
