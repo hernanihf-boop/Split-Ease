@@ -146,11 +146,10 @@ const Summary: React.FC<SummaryProps> = ({ users, expenses }) => {
             <p className="text-slate-500 dark:text-slate-400">All expenses are balanced among everyone.</p>
              <button 
                 onClick={handleDownloadXLSX}
-                className="mt-4 flex mx-auto items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50 transition-colors duration-300"
+                className="mt-4 flex mx-auto items-center p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50 transition-colors duration-300"
                 title="Download full report as XLSX"
             >
                 <DownloadIcon className="w-5 h-5"/>
-                <span>Download Report</span>
             </button>
         </div>
     )
@@ -159,15 +158,14 @@ const Summary: React.FC<SummaryProps> = ({ users, expenses }) => {
   return (
     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white">How to Settle Up</h2>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">How to Settle Up</h2>
             <button 
                 onClick={handleDownloadXLSX}
                 disabled={expenses.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Download full report as XLSX"
             >
                 <DownloadIcon className="w-5 h-5"/>
-                <span>Download Report</span>
             </button>
       </div>
       <div className="space-y-3">
