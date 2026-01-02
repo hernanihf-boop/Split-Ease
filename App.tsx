@@ -101,12 +101,15 @@ const App: React.FC = () => {
 
         <header className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-center sm:text-left flex items-center gap-4">
-            <img src="/icon.svg" className="w-12 h-12 rounded-xl shadow-lg" alt="Logo" />
+            <div className="relative">
+               <div className="absolute inset-0 bg-sky-500 blur-lg opacity-20 rounded-xl"></div>
+               <img src="/icon.svg" className="relative w-14 h-14 rounded-2xl shadow-xl border-2 border-white dark:border-slate-800" alt="Logo" />
+            </div>
             <div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none">
                 Split<span className="text-sky-500">Ease</span>
               </h1>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">Escanea y divide gastos con IA</p>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">Escanea y divide gastos con IA</p>
             </div>
           </div>
           
