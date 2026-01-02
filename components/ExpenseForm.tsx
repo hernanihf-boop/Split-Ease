@@ -66,15 +66,26 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
     setAiError(null);
     try {
       const base64Data = base64ImageWithMime.split(',')[1];
-      // Cambiado de /.netlify/functions/gemini a /api/gemini
-      const apiResponse = await fetch('/api/gemini', {
+      const payload = {
+        base64Image: base64Data,
+        mimeType: mimeType,
+      };
+
+      // Intentar Vercel primero, luego Netlify si falla con 404
+      let apiResponse = await fetch('/api/gemini', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              base64Image: base64Data,
-              mimeType: mimeType,
-          }),
+          body: JSON.stringify(payload),
       });
+
+      // Si el endpoint de Vercel no existe (404), probamos el de Netlify
+      if (apiResponse.status === 404) {
+          apiResponse = await fetch('/.netlify/functions/gemini', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+          });
+      }
 
       const result = await apiResponse.json();
       if (!apiResponse.ok) throw new Error(result.error || 'Error en IA');
@@ -90,6 +101,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
       }
     } catch (err: any) {
       setAiError("No se pudo procesar el recibo automáticamente.");
+      console.error("AI Error:", err);
     } finally {
       setAiIsLoading(false);
       setParticipantIds(users.map(u => u.id));
@@ -121,31 +133,71 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense }) => {
     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700">
       {!receiptImage ? (
         <>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-4 flex items-center">
-              <SparklesIcon className="w-7 h-7 mr-3 text-violet-500" />
-              Añadir Gasto
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center">
+                <SparklesIcon className="w-7 h-7 mr-3 text-violet-500" />
+                Añadir Gasto
+            </h2>
+          </div>
           <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="receipt-upload" />
           <label htmlFor="receipt-upload" className="cursor-pointer w-full flex flex-col justify-center items-center px-6 py-12 border-2 border-slate-300 dark:border-slate-600 border-dashed rounded-xl text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-all">
               <CameraIcon className="w-16 h-16 mb-4 text-sky-500" />
               <span className="font-bold text-lg text-sky-600">Escanear Recibo</span>
+              <p className="text-xs mt-2 text-slate-400">La IA extraerá los datos automáticamente</p>
           </label>
+          {aiError && <p className="mt-2 text-red-500 text-xs text-center">{aiError}</p>}
         </>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="relative">
+          <div className="relative group">
               <img src={receiptImage} className="w-full max-h-64 object-contain rounded-xl bg-slate-50 dark:bg-slate-900" />
-              {aiIsLoading && <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center rounded-xl text-white font-bold">Analizando...</div>}
+              {aiIsLoading && (
+                <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center rounded-xl text-white font-bold backdrop-blur-[2px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
+                  Analizando...
+                </div>
+              )}
+              {!aiIsLoading && (
+                <button 
+                  type="button" 
+                  onClick={() => setReceiptImage(undefined)}
+                  className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              )}
           </div>
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descripción" className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700" />
-          <div className="grid grid-cols-2 gap-4">
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Monto" step="0.01" className="p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700" />
-            <select value={paidById} onChange={(e) => setPaidById(e.target.value)} className="p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700">
-              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Descripción</label>
+              <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ej: Pizza Night" className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all" required />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Monto ($)</label>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" step="0.01" className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all" required />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Pagado por</label>
+                <select value={paidById} onChange={(e) => setPaidById(e.target.value)} className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all">
+                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+            </div>
           </div>
-          <button type="submit" className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl shadow-lg">Confirmar Gasto</button>
-          <button type="button" onClick={resetFormState} className="w-full text-slate-500 text-sm">Cancelar</button>
+
+          {formError && <p className="text-red-500 text-sm">{formError}</p>}
+          
+          <div className="flex flex-col gap-2 pt-2">
+            <button type="submit" className="w-full py-4 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-colors active:scale-95 disabled:opacity-50" disabled={aiIsLoading}>
+              Confirmar Gasto
+            </button>
+            <button type="button" onClick={resetFormState} className="w-full py-2 text-slate-500 text-sm hover:text-slate-700 dark:hover:text-slate-300">
+              Cancelar
+            </button>
+          </div>
         </form>
       )}
     </div>

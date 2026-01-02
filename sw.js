@@ -1,4 +1,5 @@
-const CACHE_NAME = 'splitease-cache-v4';
+
+const CACHE_NAME = 'splitease-cache-v5';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -32,8 +33,8 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   
-  // No cachear las llamadas a la API de Netlify/Gemini
-  if (event.request.url.includes('/.netlify/functions/')) {
+  // No cachear las llamadas a la API de Netlify/Vercel/Gemini
+  if (event.request.url.includes('/.netlify/functions/') || event.request.url.includes('/api/')) {
     return;
   }
 
@@ -54,7 +55,6 @@ self.addEventListener('fetch', event => {
         return fetchResponse;
       });
     }).catch(() => {
-      // Si falla todo y es una navegación de página, mostrar la raíz (offline support)
       if (event.request.mode === 'navigate') {
         return caches.match('/');
       }
