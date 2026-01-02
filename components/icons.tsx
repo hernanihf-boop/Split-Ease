@@ -1,6 +1,39 @@
 
 import React from 'react';
 
+export const Logo: React.FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 512 512" className={className} xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#0ea5e9" />
+        <stop offset="100%" stopColor="#4f46e5" />
+      </linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="10" />
+        <feOffset dx="0" dy="8" result="offsetblur" />
+        <feComponentTransfer>
+          <feFuncA type="linear" slope="0.3" />
+        </feComponentTransfer>
+        <feMerge>
+          <feMergeNode />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+    <rect width="512" height="512" rx="128" fill="url(#logoGrad)" />
+    <g filter="url(#shadow)" transform="translate(116, 80)">
+      <path d="M0 0h280v320l-23.3-12-23.3 12-23.3-12-23.3 12-23.3-12-23.3 12-23.3-12-23.3 12-23.3-12-23.3 12-23.3-12L0 320V0z" fill="white" />
+      <path d="M0 160l280-40v30L0 190z" fill="#f1f5f9" />
+      <path d="M230 40l10 25 25 10-25 10-10 25-10-25-25-10 25-10 10-25z" fill="#fbbf24" />
+      <rect x="40" y="50" width="110" height="14" rx="7" fill="#e2e8f0" />
+      <rect x="40" y="85" width="70" height="14" rx="7" fill="#e2e8f0" />
+      <rect x="40" y="220" width="200" height="14" rx="7" fill="#e2e8f0" />
+      <rect x="40" y="255" width="140" height="14" rx="7" fill="#e2e8f0" />
+      <rect x="180" y="280" width="60" height="22" rx="6" fill="#0ea5e9" fillOpacity="0.2" />
+    </g>
+  </svg>
+);
+
 export const UserPlusIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -34,7 +67,7 @@ export const CameraIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 export const PhotographIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2-2v12a2 2 0 002 2z" />
     </svg>
 );
 

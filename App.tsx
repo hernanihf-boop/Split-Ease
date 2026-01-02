@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Expense } from './types.ts';
 import UserManagement from './components/UserManagement.tsx';
 import ExpenseForm from './components/ExpenseForm.tsx';
 import ExpenseList from './components/ExpenseList.tsx';
 import Summary from './components/Summary.tsx';
+import { Logo } from './components/icons.tsx';
 
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>(() => {
@@ -102,21 +104,21 @@ const App: React.FC = () => {
         <header className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-center sm:text-left flex items-center gap-4">
             <div className="relative">
-               <div className="absolute inset-0 bg-sky-500 blur-lg opacity-20 rounded-xl"></div>
-               <img src="/icon.svg" className="relative w-14 h-14 rounded-2xl shadow-xl border-2 border-white dark:border-slate-800" alt="Logo" />
+               <div className="absolute inset-0 bg-sky-500 blur-lg opacity-20 rounded-2xl"></div>
+               <Logo className="relative w-16 h-16 rounded-2xl shadow-xl border-2 border-white dark:border-slate-800 transition-transform hover:scale-105" />
             </div>
             <div>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none">
                 Split<span className="text-sky-500">Ease</span>
               </h1>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">Escanea y divide gastos con IA</p>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 uppercase tracking-wider font-semibold">IA Expense Splitter</p>
             </div>
           </div>
           
           {(users.length > 0 || expenses.length > 0) && (
             <button 
               onClick={handleShareGroup}
-              className="flex items-center gap-2 px-4 py-2 bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 font-bold rounded-full hover:bg-sky-200 transition-all active:scale-95 border border-sky-200 dark:border-sky-800 text-sm"
+              className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 text-white font-bold rounded-full hover:bg-sky-600 shadow-lg shadow-sky-500/20 transition-all active:scale-95 text-sm"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
@@ -133,8 +135,8 @@ const App: React.FC = () => {
           <ExpenseList expenses={expenses} users={users} onDeleteExpense={handleDeleteExpense} />
         </main>
         
-        <footer className="text-center text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-widest pt-8 pb-4">
-            Hecho con IA • Progressive Web App
+        <footer className="text-center text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-widest pt-12 pb-4">
+            SplitEase v1.2 • AI Optimized Experience
         </footer>
       </div>
     </div>
