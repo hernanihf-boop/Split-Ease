@@ -21,7 +21,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       return;
     }
     if (users.some(user => user.name.toLowerCase() === newUserName.trim().toLowerCase())) {
-        setError('A user with this name already exists.');
+        setError('Already exists.');
         return;
     }
     onAddUser(newUserName.trim());
@@ -30,52 +30,64 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg">
-      <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-4 flex items-center">
-        <UserPlusIcon className="w-7 h-7 mr-3 text-sky-500" />
-        Manage Users
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700/50">
+      <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-5 flex items-center">
+        <div className="bg-sky-100 dark:bg-sky-900/30 p-2 rounded-lg mr-3">
+          <UserPlusIcon className="w-5 h-5 text-sky-500" />
+        </div>
+        Amigos en el Grupo
       </h2>
-      <form onSubmit={handleAddUser} className="flex flex-col sm:flex-row gap-3 mb-4">
+      
+      <form onSubmit={handleAddUser} className="flex gap-2 mb-6">
         <input
           type="text"
           value={newUserName}
-          onChange={(e) => {
-            setNewUserName(e.target.value);
-            if (error) setError('');
-          }}
-          placeholder="Enter new user name"
-          className="flex-grow w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none transition"
+          onChange={(e) => { setNewUserName(e.target.value); if (error) setError(''); }}
+          placeholder="Nombre del amigo..."
+          className="flex-grow px-4 py-3 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none transition-all"
         />
         <button
           type="submit"
-          className="w-full sm:w-auto px-6 py-2 bg-sky-500 text-white font-semibold rounded-lg hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50 transition-colors duration-300 flex items-center justify-center"
+          className="px-5 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-600 transition-all active:scale-95 shadow-lg shadow-sky-500/20"
         >
-          <UserPlusIcon className="w-5 h-5 mr-2"/>
-          Add User
+          Añadir
         </button>
       </form>
-      {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-      <div className="space-y-2">
-        {users.length === 0 ? (
-          <p className="text-slate-500 dark:text-slate-400 text-center py-4">No users added yet. Add at least two to start splitting!</p>
-        ) : (
-          <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {users.map(user => (
-              <li key={user.id} className="flex items-center justify-between bg-slate-100 dark:bg-slate-700 p-3 rounded-lg">
-                <span className="text-slate-700 dark:text-slate-200 font-medium truncate">{user.name}</span>
-                <button
-                    onClick={() => onDeleteUser(user.id)}
-                    className={`text-slate-400 hover:text-red-500 transition-colors ${hasExpenses ? 'cursor-not-allowed opacity-50' : ''}`}
-                    title={hasExpenses ? "Cannot delete users while expenses exist" : "Delete user"}
-                    disabled={hasExpenses}
-                >
-                  <TrashIcon className="w-5 h-5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      
+      {error && <p className="text-red-500 text-xs mb-4 font-medium px-2">{error}</p>}
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {users.map(user => (
+          <div key={user.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 group hover:border-sky-200 dark:hover:border-sky-900 transition-all">
+            <div className="flex items-center gap-3">
+              {user.picture ? (
+                <img src={user.picture} className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700" alt={user.name} />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-500">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{user.name}</span>
+            </div>
+            {!user.id.startsWith('google-') && (
+              <button
+                onClick={() => onDeleteUser(user.id)}
+                disabled={hasExpenses}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 transition-all disabled:hidden"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            )}
+            {user.id.startsWith('google-') && (
+              <span className="text-[9px] font-black text-sky-500 bg-sky-50 dark:bg-sky-900/30 px-2 py-0.5 rounded-md uppercase">Tú</span>
+            )}
+          </div>
+        ))}
       </div>
+      
+      {users.length < 2 && (
+        <p className="text-slate-400 text-xs text-center mt-4 italic">Añade al menos a un amigo para empezar a dividir.</p>
+      )}
     </div>
   );
 };

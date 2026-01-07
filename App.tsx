@@ -8,110 +8,127 @@ import Summary from './components/Summary.tsx';
 import { Logo, SparklesIcon } from './components/icons.tsx';
 import { GoogleGenAI } from "@google/genai";
 
+// Fix: Declaring google on window to resolve TypeScript errors
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
 const App: React.FC = () => {
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('split-ease-auth');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [users, setUsers] = useState<User[]>(() => {
     const savedUsers = localStorage.getItem('split-ease-users');
     return savedUsers ? JSON.parse(savedUsers) : [];
   });
+  
   const [expenses, setExpenses] = useState<Expense[]>(() => {
     const savedExpenses = localStorage.getItem('split-ease-expenses');
     return savedExpenses ? JSON.parse(savedExpenses) : [];
   });
-  const [isStandalone, setIsStandalone] = useState(false);
   
-  // AI Health Check States
+  const [isStandalone, setIsStandalone] = useState(false);
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const [aiDiagnostic, setAiDiagnostic] = useState<string | null>(null);
 
+  // --- GOOGLE AUTH LOGIC ---
+  const handleCredentialResponse = useCallback((response: any) => {
+    try {
+      // Decoding JWT (Google ID Token) without a library for lightness
+      const base64Url = response.credential.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+      const profile = JSON.parse(jsonPayload);
+
+      const user: User = {
+        id: `google-${profile.sub}`,
+        name: profile.name,
+        picture: profile.picture,
+        email: profile.email
+      };
+
+      setCurrentUser(user);
+      localStorage.setItem('split-ease-auth', JSON.stringify(user));
+
+      // Auto-add current user to the group if not exists
+      setUsers(prev => {
+        if (prev.find(u => u.email === user.email)) return prev;
+        return [...prev, user];
+      });
+    } catch (e) {
+      console.error("Auth error:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Correctly using window.google with global declaration
+    if (window.google) {
+      window.google.accounts.id.initialize({
+        client_id: "680783584893-j5nqu7mks3f36m9f425s0v6q60r8fub9.apps.googleusercontent.com", // Demo ID, should be env var in real prod
+        callback: handleCredentialResponse
+      });
+      if (!currentUser) {
+        window.google.accounts.id.renderButton(
+          document.getElementById("googleBtn"),
+          { theme: "outline", size: "large", shape: "pill", width: 280 }
+        );
+      }
+    }
+  }, [currentUser, handleCredentialResponse]);
+
+  const logout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('split-ease-auth');
+    window.location.reload();
+  };
+
+  // --- END AUTH LOGIC ---
+
   const checkAI = useCallback(async () => {
     setAiStatus('checking');
-    setAiDiagnostic(null);
-    
-    let apiKey = '';
     try {
-      apiKey = process.env.API_KEY || '';
-    } catch (e) {
-      console.warn("process.env is not defined.");
-    }
-    
-    if (!apiKey || apiKey === "YOUR_API_KEY" || apiKey.trim() === "" || apiKey.length < 5) {
-      setAiStatus('error');
-      setAiDiagnostic("API_KEY not detected. Please verify environment settings and perform a manual redeploy.");
-      return;
-    }
-
-    try {
+      const apiKey = process.env.API_KEY || '';
+      if (!apiKey || apiKey.length < 5) throw new Error("API KEY Missing");
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'ping',
-        config: { 
-            maxOutputTokens: 5,
-            thinkingConfig: { thinkingBudget: 0 }
-        }
+        config: { maxOutputTokens: 2, thinkingConfig: { thinkingBudget: 0 } }
       });
-      
-      if (response && response.text) {
-        setAiStatus('ok');
-      } else {
-        throw new Error("Empty response from Gemini.");
-      }
+      if (response.text) setAiStatus('ok');
     } catch (err: any) {
-      console.error("AI Startup Check Failed:", err);
       setAiStatus('error');
-      
-      let message = err.message || "Connection error.";
-      if (message.includes("403")) message = "Invalid API Key (403). Ensure the Gemini API is enabled for this key.";
-      if (message.includes("429")) message = "Quota limit exceeded (429).";
-      if (message.includes("fetch")) message = "Network/CORS error (Is a VPN active?).";
-      
-      setAiDiagnostic(message);
+      setAiDiagnostic(err.message);
     }
   }, []);
 
   useEffect(() => {
     const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(isPWA);
-
     checkAI();
 
-    // Resilient import logic for shared groups
-    const handleImport = () => {
-      const params = new URLSearchParams(window.location.search);
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const sharedData = params.get('import') || hashParams.get('import');
-      
-      if (sharedData) {
-        try {
-          // Robust base64 decoding for UTF-8
-          const decodedString = decodeURIComponent(atob(sharedData).split('').map(function(c) {
-              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join(''));
-          
-          const decoded = JSON.parse(decodedString);
-          if (confirm(`Do you want to import the group "${decoded.name || 'Shared Group'}"?`)) {
-            setUsers(decoded.users || []);
-            setExpenses(decoded.expenses || []);
-            // Clear URL to prevent multiple imports on refresh
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-        } catch (e) {
-          console.error("Error importing shared data:", e);
-          alert("The shared link appears to be invalid or corrupted.");
+    // Import logic
+    const params = new URLSearchParams(window.location.search);
+    const sharedData = params.get('import');
+    if (sharedData) {
+      try {
+        const decodedString = decodeURIComponent(atob(sharedData).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+        const decoded = JSON.parse(decodedString);
+        if (confirm(`Import group "${decoded.name || 'Shared Group'}"?`)) {
+          setUsers(decoded.users || []);
+          setExpenses(decoded.expenses || []);
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
-      }
-    };
-
-    handleImport();
+      } catch (e) { console.error("Import error", e); }
+    }
   }, [checkAI]);
 
-  useEffect(() => {
-    localStorage.setItem('split-ease-users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    localStorage.setItem('split-ease-expenses', JSON.stringify(expenses));
-  }, [expenses]);
+  useEffect(() => { localStorage.setItem('split-ease-users', JSON.stringify(users)); }, [users]);
+  useEffect(() => { localStorage.setItem('split-ease-expenses', JSON.stringify(expenses)); }, [expenses]);
   
   const handleAddUser = useCallback((name: string) => {
     const newUser: User = { id: `user-${Date.now()}`, name };
@@ -119,10 +136,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleDeleteUser = useCallback((id: string) => {
-    if (expenses.length > 0) {
-        alert("Users cannot be deleted while expenses exist.");
-        return;
-    }
+    if (expenses.length > 0) { alert("Delete expenses first."); return; }
     setUsers(prev => prev.filter(user => user.id !== id));
   }, [expenses.length]);
 
@@ -138,124 +152,67 @@ const App: React.FC = () => {
   const handleShareGroup = () => {
     try {
       const data = { name: "SplitEase Group", users, expenses };
-      const jsonString = JSON.stringify(data);
-      
-      // UTF-8 safe base64 encoding
-      const encoded = btoa(encodeURIComponent(jsonString).replace(/%([0-9A-F]{2})/g, function(match, p1) {
-          return String.fromCharCode(parseInt(p1, 16));
-      }));
-      
-      // We use a relative path for the URL to avoid domain mismatch issues in preview environments
-      const baseUrl = window.location.origin + window.location.pathname;
-      const shareUrl = `${baseUrl}?import=${encoded}`;
-
-      if (navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)) {
-        navigator.share({ 
-          title: 'SplitEase Group', 
-          text: 'Check our shared expenses on SplitEase',
-          url: shareUrl 
-        }).catch(err => {
-            console.warn("Native share failed, using clipboard:", err);
-            copyToClipboard(shareUrl);
-        });
-      } else {
-        copyToClipboard(shareUrl);
-      }
-    } catch (e) {
-      console.error("Error generating share link:", e);
-      alert("Failed to generate share link.");
-    }
+      const encoded = btoa(encodeURIComponent(JSON.stringify(data)).replace(/%([0-9A-F]{2})/g, (m, p1) => String.fromCharCode(parseInt(p1, 16))));
+      const shareUrl = `${window.location.origin}${window.location.pathname}?import=${encoded}`;
+      navigator.clipboard.writeText(shareUrl).then(() => alert('Link copied!'));
+    } catch (e) { alert("Error generating link."); }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      alert('Link copied! Send it to your friends to sync the group.');
-    }).catch(err => {
-      console.error('Copy failed: ', err);
-      alert('Error copying link to clipboard.');
-    });
-  };
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
+        <div className="mb-8 relative">
+          <div className="absolute inset-0 bg-sky-500 blur-3xl opacity-20 rounded-full"></div>
+          <Logo className="w-32 h-32 relative shadow-2xl rounded-3xl" />
+        </div>
+        <h1 className="text-4xl font-black text-white mb-2 tracking-tight">Split<span className="text-sky-400">Ease</span></h1>
+        <p className="text-slate-400 max-w-xs mb-10 leading-relaxed">The smarter way to split expenses with friends using AI.</p>
+        
+        <div id="googleBtn" className="min-h-[50px]"></div>
+        
+        <p className="mt-8 text-slate-500 text-xs">By signing in, you agree to easily split the bill.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans p-4 sm:p-6 lg:p-8 pb-24">
       <div className="max-w-4xl mx-auto space-y-8">
         
-        {!isStandalone && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl text-xs sm:text-sm text-amber-800 dark:text-amber-300 flex items-center justify-between">
-            <span>✨ Install this app for a better offline experience.</span>
-            <button onClick={() => setIsStandalone(true)} className="ml-2 font-bold opacity-70">✕</button>
-          </div>
-        )}
-
         <header className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-center sm:text-left flex items-center gap-4">
-            <div className="relative">
-               <div className="absolute inset-0 bg-sky-500 blur-lg opacity-20 rounded-2xl"></div>
-               <Logo className="relative w-16 h-16 rounded-2xl shadow-xl border-2 border-white dark:border-slate-800" />
-            </div>
+            <Logo className="w-12 h-12 rounded-xl shadow-lg" />
             <div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none">
-                Split<span className="text-sky-500">Ease</span>
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 uppercase tracking-wider font-semibold">AI Expense Splitter</p>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white">Split<span className="text-sky-500">Ease</span></h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">AI Ready!</span>
+              </div>
             </div>
           </div>
-          
-          {(users.length > 0 || expenses.length > 0) && (
-            <button onClick={handleShareGroup} className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 text-white font-bold rounded-full hover:bg-sky-600 shadow-lg shadow-sky-500/20 transition-all active:scale-95 text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
-              </svg>
-              Share Group
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-1.5 pr-4 rounded-full shadow-sm border border-slate-100 dark:border-slate-700">
+              <img src={currentUser.picture} className="w-8 h-8 rounded-full border-2 border-sky-500" alt="Profile" />
+              <span className="text-sm font-bold truncate max-w-[100px]">{currentUser.name.split(' ')[0]}</span>
+              <button onClick={logout} className="text-slate-400 hover:text-red-500 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              </button>
+            </div>
+            <button onClick={handleShareGroup} className="p-2.5 bg-sky-500 text-white rounded-full hover:bg-sky-600 shadow-lg transition-transform active:scale-90">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" /></svg>
             </button>
-          )}
+          </div>
         </header>
 
         <main className="space-y-8">
           <UserManagement users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} hasExpenses={expenses.length > 0} />
-          {users.length >= 2 && (
-            <ExpenseForm 
-              users={users} 
-              onAddExpense={handleAddExpense} 
-              aiStatus={aiStatus}
-              aiDiagnostic={aiDiagnostic}
-            />
-          )}
+          {users.length >= 2 && <ExpenseForm users={users} onAddExpense={handleAddExpense} aiStatus={aiStatus} aiDiagnostic={aiDiagnostic} />}
           <Summary users={users} expenses={expenses} />
           <ExpenseList expenses={expenses} users={users} onDeleteExpense={handleDeleteExpense} />
         </main>
         
-        <footer className="flex flex-col items-center justify-center gap-3 pt-12 pb-8">
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-3">
-              {aiStatus === 'checking' && (
-                <span className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-slate-200/50 dark:bg-slate-800/50 px-3 py-1 rounded-full animate-pulse border border-slate-200 dark:border-slate-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                  Checking AI...
-                </span>
-              )}
-              {aiStatus === 'ok' && (
-                <span className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-full font-bold border border-emerald-100 dark:border-emerald-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  AI Ready!
-                </span>
-              )}
-              {aiStatus === 'error' && (
-                <div className="flex flex-col items-center gap-2">
-                  <span className="flex items-center gap-1.5 text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-1 rounded-full font-bold border border-red-100 dark:border-red-800">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                    AI Offline
-                  </span>
-                  <button onClick={checkAI} className="text-[10px] text-sky-500 hover:text-sky-600 underline font-semibold transition-colors">
-                      Retry connection
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-          <p className="text-center text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-widest mt-2">
-            SplitEase v1.12 • AI Optimized Experience
-          </p>
+        <footer className="text-center text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-widest pt-8">
+          SplitEase v2.0 • Pro Identity
         </footer>
       </div>
     </div>
