@@ -75,27 +75,34 @@ const App: React.FC = () => {
 
     checkAI();
 
-    const params = new URLSearchParams(window.location.search);
-    const sharedData = params.get('import');
-    
-    if (sharedData) {
-      try {
-        // Decode base64 handling UTF-8 characters via percent-encoding
-        const decodedString = decodeURIComponent(atob(sharedData).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        
-        const decoded = JSON.parse(decodedString);
-        if (confirm(`Do you want to import the group "${decoded.name || 'Shared Group'}"?`)) {
-          setUsers(decoded.users || []);
-          setExpenses(decoded.expenses || []);
-          // Clean URL params after successful import
-          window.history.replaceState({}, document.title, window.location.pathname);
+    // Resilient import logic for shared groups
+    const handleImport = () => {
+      const params = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const sharedData = params.get('import') || hashParams.get('import');
+      
+      if (sharedData) {
+        try {
+          // Robust base64 decoding for UTF-8
+          const decodedString = decodeURIComponent(atob(sharedData).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          
+          const decoded = JSON.parse(decodedString);
+          if (confirm(`Do you want to import the group "${decoded.name || 'Shared Group'}"?`)) {
+            setUsers(decoded.users || []);
+            setExpenses(decoded.expenses || []);
+            // Clear URL to prevent multiple imports on refresh
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } catch (e) {
+          console.error("Error importing shared data:", e);
+          alert("The shared link appears to be invalid or corrupted.");
         }
-      } catch (e) {
-        console.error("Error importing shared data:", e);
       }
-    }
+    };
+
+    handleImport();
   }, [checkAI]);
 
   useEffect(() => {
@@ -138,16 +145,17 @@ const App: React.FC = () => {
           return String.fromCharCode(parseInt(p1, 16));
       }));
       
-      const shareUrl = `${window.location.origin}${window.location.pathname}?import=${encoded}`;
+      // We use a relative path for the URL to avoid domain mismatch issues in preview environments
+      const baseUrl = window.location.origin + window.location.pathname;
+      const shareUrl = `${baseUrl}?import=${encoded}`;
 
-      // Check for native sharing capabilities on mobile
       if (navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)) {
         navigator.share({ 
           title: 'SplitEase Group', 
           text: 'Check our shared expenses on SplitEase',
           url: shareUrl 
         }).catch(err => {
-            console.error("Share failed, falling back to clipboard:", err);
+            console.warn("Native share failed, using clipboard:", err);
             copyToClipboard(shareUrl);
         });
       } else {
@@ -161,7 +169,7 @@ const App: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      alert('Link copied to clipboard!');
+      alert('Link copied! Send it to your friends to sync the group.');
     }).catch(err => {
       console.error('Copy failed: ', err);
       alert('Error copying link to clipboard.');
@@ -174,7 +182,7 @@ const App: React.FC = () => {
         
         {!isStandalone && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl text-xs sm:text-sm text-amber-800 dark:text-amber-300 flex items-center justify-between">
-            <span>✨ Install this app via your browser menu for the best experience.</span>
+            <span>✨ Install this app for a better offline experience.</span>
             <button onClick={() => setIsStandalone(true)} className="ml-2 font-bold opacity-70">✕</button>
           </div>
         )}
@@ -229,7 +237,7 @@ const App: React.FC = () => {
               {aiStatus === 'ok' && (
                 <span className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-full font-bold border border-emerald-100 dark:border-emerald-800">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  AI On
+                  AI Ready!
                 </span>
               )}
               {aiStatus === 'error' && (
@@ -246,7 +254,7 @@ const App: React.FC = () => {
             </div>
           </div>
           <p className="text-center text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-widest mt-2">
-            SplitEase v1.2 • AI Optimized Experience
+            SplitEase v1.12 • AI Optimized Experience
           </p>
         </footer>
       </div>
