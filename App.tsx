@@ -36,7 +36,7 @@ const App: React.FC = () => {
     
     if (!apiKey || apiKey === "YOUR_API_KEY" || apiKey.trim() === "" || apiKey.length < 5) {
       setAiStatus('error');
-      setAiDiagnostic("API_KEY no detectada en el cliente. Verifica que la variable 'API_KEY' esté en la configuración de Netlify/Vercel y haz un REDEPLOY manual.");
+      setAiDiagnostic("API_KEY not detected. Please verify environment settings and perform a manual redeploy.");
       return;
     }
 
@@ -54,16 +54,16 @@ const App: React.FC = () => {
       if (response && response.text) {
         setAiStatus('ok');
       } else {
-        throw new Error("Respuesta vacía de Gemini.");
+        throw new Error("Empty response from Gemini.");
       }
     } catch (err: any) {
       console.error("AI Startup Check Failed:", err);
       setAiStatus('error');
       
-      let message = err.message || "Error de conexión.";
-      if (message.includes("403")) message = "API Key Inválida (403). Revisa si la clave tiene habilitada la API de Gemini.";
-      if (message.includes("429")) message = "Límite de cuota excedido (429).";
-      if (message.includes("fetch")) message = "Error de red/CORS (¿VPN activada?).";
+      let message = err.message || "Connection error.";
+      if (message.includes("403")) message = "Invalid API Key (403). Ensure the Gemini API is enabled for this key.";
+      if (message.includes("429")) message = "Quota limit exceeded (429).";
+      if (message.includes("fetch")) message = "Network/CORS error (Is a VPN active?).";
       
       setAiDiagnostic(message);
     }
@@ -80,14 +80,20 @@ const App: React.FC = () => {
     
     if (sharedData) {
       try {
-        const decoded = JSON.parse(atob(sharedData));
-        if (confirm(`¿Quieres importar el grupo "${decoded.name || 'Compartido'}"?`)) {
-          setUsers(decoded.users);
-          setExpenses(decoded.expenses);
+        // Decode base64 handling UTF-8 characters via percent-encoding
+        const decodedString = decodeURIComponent(atob(sharedData).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const decoded = JSON.parse(decodedString);
+        if (confirm(`Do you want to import the group "${decoded.name || 'Shared Group'}"?`)) {
+          setUsers(decoded.users || []);
+          setExpenses(decoded.expenses || []);
+          // Clean URL params after successful import
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       } catch (e) {
-        console.error("Error importing shared data", e);
+        console.error("Error importing shared data:", e);
       }
     }
   }, [checkAI]);
@@ -107,7 +113,7 @@ const App: React.FC = () => {
 
   const handleDeleteUser = useCallback((id: string) => {
     if (expenses.length > 0) {
-        alert("No se pueden borrar usuarios si hay gastos registrados.");
+        alert("Users cannot be deleted while expenses exist.");
         return;
     }
     setUsers(prev => prev.filter(user => user.id !== id));
@@ -123,16 +129,43 @@ const App: React.FC = () => {
   }, []);
 
   const handleShareGroup = () => {
-    const data = { name: "SplitEase Group", users, expenses };
-    const encoded = btoa(JSON.stringify(data));
-    const shareUrl = `${window.location.origin}${window.location.pathname}?import=${encoded}`;
+    try {
+      const data = { name: "SplitEase Group", users, expenses };
+      const jsonString = JSON.stringify(data);
+      
+      // UTF-8 safe base64 encoding
+      const encoded = btoa(encodeURIComponent(jsonString).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+          return String.fromCharCode(parseInt(p1, 16));
+      }));
+      
+      const shareUrl = `${window.location.origin}${window.location.pathname}?import=${encoded}`;
 
-    if (navigator.share) {
-      navigator.share({ title: 'SplitEase Group', url: shareUrl }).catch(console.error);
-    } else {
-      navigator.clipboard.writeText(shareUrl);
-      alert('¡Enlace copiado!');
+      // Check for native sharing capabilities on mobile
+      if (navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)) {
+        navigator.share({ 
+          title: 'SplitEase Group', 
+          text: 'Check our shared expenses on SplitEase',
+          url: shareUrl 
+        }).catch(err => {
+            console.error("Share failed, falling back to clipboard:", err);
+            copyToClipboard(shareUrl);
+        });
+      } else {
+        copyToClipboard(shareUrl);
+      }
+    } catch (e) {
+      console.error("Error generating share link:", e);
+      alert("Failed to generate share link.");
     }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Link copied to clipboard!');
+    }).catch(err => {
+      console.error('Copy failed: ', err);
+      alert('Error copying link to clipboard.');
+    });
   };
 
   return (
@@ -141,7 +174,7 @@ const App: React.FC = () => {
         
         {!isStandalone && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-xl text-xs sm:text-sm text-amber-800 dark:text-amber-300 flex items-center justify-between">
-            <span>✨ Instala esta app desde el menú del navegador para una mejor experiencia.</span>
+            <span>✨ Install this app via your browser menu for the best experience.</span>
             <button onClick={() => setIsStandalone(true)} className="ml-2 font-bold opacity-70">✕</button>
           </div>
         )}
@@ -165,7 +198,7 @@ const App: React.FC = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
               </svg>
-              Compartir Grupo
+              Share Group
             </button>
           )}
         </header>
@@ -190,13 +223,13 @@ const App: React.FC = () => {
               {aiStatus === 'checking' && (
                 <span className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-slate-200/50 dark:bg-slate-800/50 px-3 py-1 rounded-full animate-pulse border border-slate-200 dark:border-slate-700">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                  Verificando AI...
+                  Checking AI...
                 </span>
               )}
               {aiStatus === 'ok' && (
                 <span className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-full font-bold border border-emerald-100 dark:border-emerald-800">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  AI Online
+                  AI On
                 </span>
               )}
               {aiStatus === 'error' && (
@@ -206,7 +239,7 @@ const App: React.FC = () => {
                     AI Offline
                   </span>
                   <button onClick={checkAI} className="text-[10px] text-sky-500 hover:text-sky-600 underline font-semibold transition-colors">
-                      Reintentar conexión
+                      Retry connection
                   </button>
                 </div>
               )}

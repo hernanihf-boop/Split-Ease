@@ -33,7 +33,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   
-  // No cachear las llamadas a la API de Netlify/Vercel/Gemini
+  // Do not cache API calls to backend functions or Gemini
   if (event.request.url.includes('/.netlify/functions/') || event.request.url.includes('/api/')) {
     return;
   }
@@ -41,7 +41,7 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request).then(response => {
       return response || fetch(event.request).then(fetchResponse => {
-        // Solo cachear recursos estáticos conocidos o de confianza
+        // Only cache known static or trusted third-party resources
         if (fetchResponse.ok && (
             event.request.url.startsWith(self.location.origin) || 
             event.request.url.includes('cdn.tailwindcss.com') ||

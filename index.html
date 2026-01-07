@@ -52,13 +52,13 @@
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
+      // Only register SW if we are on a compatible origin to avoid cross-origin errors in preview environments
+      if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('ServiceWorker registered');
-          }).catch(err => {
-            console.log('SW error: ', err);
-          });
+          // Use a relative path and check origin compatibility
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => console.log('SW registered'))
+            .catch(err => console.warn('SW registration skipped or failed:', err.message));
         });
       }
     </script>
