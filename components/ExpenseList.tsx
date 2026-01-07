@@ -12,7 +12,6 @@ interface ExpenseListProps {
 const ExpenseItem: React.FC<{ expense: Expense, users: User[], onDeleteExpense: (id: string) => void }> = ({ expense, users, onDeleteExpense }) => {
     const [showReceipt, setShowReceipt] = useState(false);
     const payer = users.find(u => u.id === expense.paidById);
-    const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
 
     return (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
@@ -30,7 +29,7 @@ const ExpenseItem: React.FC<{ expense: Expense, users: User[], onDeleteExpense: 
                     <div>
                         <h4 className="font-bold text-slate-900 dark:text-white leading-tight">{expense.description}</h4>
                         <p className="text-xs text-slate-500 mt-1">
-                          Pagado por <span className="font-bold text-slate-700 dark:text-slate-300">{payer?.name || 'Unknown'}</span>
+                          Paid by <span className="font-bold text-slate-700 dark:text-slate-300">{payer?.name || 'Unknown'}</span>
                         </p>
                         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                           {expense.participantIds.map(id => {
@@ -73,7 +72,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, users, onDeleteExpe
   if (expenses.length === 0) return null;
   return (
     <div className="space-y-4">
-      <h2 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-2">Historial de Gastos</h2>
+      <h2 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-2">Expense History</h2>
       <div className="space-y-3">
         {expenses.map(expense => (
           <ExpenseItem key={expense.id} expense={expense} users={users} onDeleteExpense={onDeleteExpense} />
