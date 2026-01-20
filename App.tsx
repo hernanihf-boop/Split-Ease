@@ -22,23 +22,22 @@ const App: React.FC = () => {
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const [onboardingName, setOnboardingName] = useState('');
   
-  // Generar avatares con expresiones aleatorias compatibles con v7
+  // Generar avatares con expresiones aleatorias únicamente POSITIVAS
   const randomAvatars = useMemo(() => {
-    const baseSeeds = ['Felix', 'Aneka', 'James', 'Aria', 'Jack', 'Luna', 'Leo', 'Zoe'];
-    const moods = [
+    const baseSeeds = ['Felix', 'Aneka', 'James', 'Aria', 'Jack', 'Luna', 'Leo', 'Zoe', 'Sasha', 'Milo'];
+    const positiveMoods = [
       { name: 'happy', params: 'mouth=smile&eyes=happy' },
       { name: 'confident', params: 'mouth=default&eyes=default&eyebrows=raisedExcited' },
       { name: 'joyful', params: 'mouth=laughing&eyes=wink' },
-      { name: 'bored', params: 'mouth=serious&eyes=closed' },
-      { name: 'distracted', params: 'mouth=tongue&eyes=squint' }
+      { name: 'content', params: 'mouth=twinkle&eyes=happy&eyebrows=default' }
     ];
 
-    // Seleccionar 5 semillas únicas y asignarles un mood aleatorio
+    // Seleccionar 5 semillas únicas y asignarles un mood positivo aleatorio
     return [...baseSeeds]
       .sort(() => 0.5 - Math.random())
       .slice(0, 5)
       .map(seed => {
-        const randomMood = moods[Math.floor(Math.random() * moods.length)];
+        const randomMood = positiveMoods[Math.floor(Math.random() * positiveMoods.length)];
         return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&${randomMood.params}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
       });
   }, []);
@@ -168,7 +167,7 @@ const App: React.FC = () => {
           
           <form onSubmit={handleOnboarding} className="space-y-6 bg-slate-800/50 p-8 rounded-3xl border border-slate-700 backdrop-blur-sm shadow-xl">
             <div className="space-y-4">
-               <label className="text-xs font-bold text-sky-400 uppercase tracking-widest block">Choose your character mood</label>
+               <label className="text-xs font-bold text-sky-400 uppercase tracking-widest block text-center">Select your profile</label>
                <div className="flex justify-center gap-4 mb-4 flex-wrap">
                 {randomAvatars.map((avatar, idx) => (
                   <button 
@@ -182,8 +181,7 @@ const App: React.FC = () => {
                       alt="Avatar" 
                       className="w-full h-full rounded-full bg-slate-700"
                       onError={(e) => {
-                        // Fallback si la URL aleatoria falla
-                        (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=fallback-${idx}&mouth=smile`;
+                        (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=fallback-${idx}&mouth=smile&eyes=happy`;
                       }}
                     />
                   </button>
@@ -247,7 +245,7 @@ const App: React.FC = () => {
                 className="w-8 h-8 rounded-full border-2 border-sky-500" 
                 alt="Me" 
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.name}&mouth=smile`;
+                  (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.name}&mouth=smile&eyes=happy`;
                 }}
               />
               <span className="text-sm font-bold">{currentUser.name}</span>
