@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Expense, User } from '../types.ts';
-import { TrashIcon, UsersIcon, PhotographIcon } from './icons.tsx';
+import { TrashIcon, PhotographIcon } from './icons.tsx';
 
 interface ExpenseListProps {
   expenses: Expense[];
