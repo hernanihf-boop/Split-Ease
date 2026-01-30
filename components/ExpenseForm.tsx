@@ -180,80 +180,64 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense, aiStatus
     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700">
       {!showForm ? (
         <>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center">
-                <SparklesIcon className="w-7 h-7 mr-3 text-violet-500" />
-                Add Expense
+          <div className="flex items-center mb-6">
+            <SparklesIcon className="w-6 h-6 mr-2 text-violet-400" />
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white">
+              Add Expense
             </h2>
           </div>
           
-          {aiStatus === 'error' ? (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-2xl">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg text-red-600 dark:text-red-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <h3 className="font-bold text-red-800 dark:text-red-300">AI Scanning Unavailable</h3>
-              </div>
-              <p className="text-red-600 dark:text-red-400 text-xs leading-relaxed">
-                {aiDiagnostic || "There was a problem initializing the AI service. Receipt scanning is currently disabled."}
-              </p>
-              <p className="text-red-500/70 dark:text-red-400/50 text-[10px] mt-2 italic">
-                Please use Manual Entry instead.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <input 
-                type="file" 
-                accept="image/*" 
-                capture="environment" 
-                ref={cameraInputRef} 
-                onChange={handleFileChange} 
-                className="hidden" 
-                id="camera-upload" 
-                disabled={aiStatus === 'checking'}
-              />
-              <label 
-                htmlFor="camera-upload" 
-                className={`cursor-pointer flex flex-col justify-center items-center p-6 border-2 border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-900/50 hover:bg-sky-50 dark:hover:bg-sky-900/10 hover:border-sky-300 transition-all active:scale-95 group ${aiStatus === 'checking' ? 'opacity-50 cursor-wait' : ''}`}
-              >
-                  <CameraIcon className={`w-10 h-10 mb-2 text-sky-500 ${aiStatus !== 'checking' ? 'group-hover:scale-110 transition-transform' : ''}`} />
-                  <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Camera</span>
-              </label>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            {/* Camera Button */}
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment" 
+              ref={cameraInputRef} 
+              onChange={handleFileChange} 
+              className="hidden" 
+              id="camera-upload" 
+              disabled={aiStatus !== 'ok'}
+            />
+            <label 
+              htmlFor="camera-upload" 
+              className={`cursor-pointer flex flex-col items-center justify-center p-8 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-800/80 transition-colors active:scale-95 group ${aiStatus !== 'ok' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <CameraIcon className="w-10 h-10 text-sky-400 mb-2 transition-transform group-hover:scale-110" />
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Camera</span>
+            </label>
 
-              <input 
-                type="file" 
-                accept="image/*" 
-                ref={galleryInputRef} 
-                onChange={handleFileChange} 
-                className="hidden" 
-                id="gallery-upload" 
-                disabled={aiStatus === 'checking'}
-              />
-              <label 
-                htmlFor="gallery-upload" 
-                className={`cursor-pointer flex flex-col justify-center items-center p-6 border-2 border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-900/50 hover:bg-violet-50 dark:hover:bg-violet-900/10 hover:border-violet-300 transition-all active:scale-95 group ${aiStatus === 'checking' ? 'opacity-50 cursor-wait' : ''}`}
-              >
-                  <PhotographIcon className={`w-10 h-10 mb-2 text-violet-500 ${aiStatus !== 'checking' ? 'group-hover:scale-110 transition-transform' : ''}`} />
-                  <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Gallery</span>
-              </label>
-            </div>
-          )}
+            {/* Gallery Button */}
+            <input 
+              type="file" 
+              accept="image/*" 
+              ref={galleryInputRef} 
+              onChange={handleFileChange} 
+              className="hidden" 
+              id="gallery-upload" 
+              disabled={aiStatus !== 'ok'}
+            />
+            <label 
+              htmlFor="gallery-upload" 
+              className={`cursor-pointer flex flex-col items-center justify-center p-8 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-800/80 transition-colors active:scale-95 group ${aiStatus !== 'ok' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <PhotographIcon className="w-10 h-10 text-violet-400 mb-2 transition-transform group-hover:scale-110" />
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Gallery</span>
+            </label>
+          </div>
 
+          {/* Manual Entry Button */}
           <button 
             onClick={() => setIsManualMode(true)}
-            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-3 py-5 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-800/80 transition-colors active:scale-95"
           >
-            <PencilIcon className="w-5 h-5 text-slate-400" />
-            Manual Entry
+            <PencilIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Manual Entry</span>
           </button>
           
           {aiError && (
             <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
-                <p className="text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-tight mb-1">AI Error Detected:</p>
+                <p className="text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-tight mb-1">AI Error:</p>
                 <p className="text-red-500 dark:text-red-300 text-xs leading-relaxed">{aiError}</p>
             </div>
           )}

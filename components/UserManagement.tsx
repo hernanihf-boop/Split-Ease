@@ -2,31 +2,37 @@
 import React, { useState } from 'react';
 import { User } from '../types.ts';
 import { UserPlusIcon, TrashIcon } from './icons.tsx';
-import { getUserAvatar } from '../App.tsx';
+import { getUserAvatar } from '../utils.ts';
 
 interface UserManagementProps {
   users: User[];
-  onAddUser: (name: string) => void;
+  onAddUser: (email: string) => void;
   onDeleteUser: (id: string) => void;
   hasExpenses: boolean;
 }
 
 const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDeleteUser, hasExpenses }) => {
-  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
   const [error, setError] = useState('');
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newUserName.trim() === '') {
-      setError('Name cannot be empty.');
+    const email = newUserEmail.trim().toLowerCase();
+    if (email === '') {
+      setError('Email cannot be empty.');
       return;
     }
-    if (users.some(user => user.name.toLowerCase() === newUserName.trim().toLowerCase())) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        setError('Please enter a valid email address.');
+        return;
+    }
+    if (users.some(user => user.email?.toLowerCase() === email)) {
         setError('This member is already in the group.');
         return;
     }
-    onAddUser(newUserName.trim());
-    setNewUserName('');
+    onAddUser(email);
+    setNewUserEmail('');
     setError('');
   };
 
@@ -41,10 +47,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       
       <form onSubmit={handleAddUser} className="flex gap-2 mb-6">
         <input
-          type="text"
-          value={newUserName}
-          onChange={(e) => { setNewUserName(e.target.value); if (error) setError(''); }}
-          placeholder="Member name..."
+          type="email"
+          value={newUserEmail}
+          onChange={(e) => { setNewUserEmail(e.target.value); if (error) setError(''); }}
+          placeholder="Member email to invite..."
           className="flex-grow px-4 py-3 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none transition-all"
         />
         <button

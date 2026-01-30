@@ -2,12 +2,11 @@
 import React, { useState } from 'react';
 import { Group, Expense } from '../types.ts';
 import { UsersIcon, CurrencyDollarIcon, SparklesIcon, TrashIcon } from './icons.tsx';
-import { getUserAvatar } from '../App.tsx';
+import { getUserAvatar } from '../utils.ts';
 
 interface GroupDashboardProps {
   groups: Group[];
   onCreateGroup: (name: string, emoji?: string) => void;
-  onDeleteGroup: (id: string) => void;
   onSelectGroup: (id: string) => void;
   isSyncing: boolean;
   currentUserId: string;
@@ -15,7 +14,7 @@ interface GroupDashboardProps {
 
 const QUICK_EMOJIS = ['✈️', '🍔', '🏠', '🚗', '🍻', '🛍️', '🎮', '💡', '🎾', '🎸', '🍹', '🏔️'];
 
-const GroupDashboard: React.FC<GroupDashboardProps> = ({ groups, onCreateGroup, onDeleteGroup, onSelectGroup, isSyncing, currentUserId }) => {
+const GroupDashboard: React.FC<GroupDashboardProps> = ({ groups, onCreateGroup, onSelectGroup, isSyncing, currentUserId }) => {
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState(QUICK_EMOJIS[0]);
   const [showCreate, setShowCreate] = useState(false);
@@ -102,35 +101,22 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({ groups, onCreateGroup, 
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {groups.map(group => {
-          const gid = group._id || group.id; // IMPORTANTE: Captura el ID real
+          // Robust ID handling: prefer _id, fallback to id
+          const gid = group._id || group.id; 
+          
+          // If no ID, skip rendering to avoid errors
+          if (!gid) return null;
+
           const totalAmount = calculateTotal(group);
-          const memberCount = group.users?.length || 0;
           const lastUpdate = getLastActivityDate(group);
-          const canDelete = Boolean(group.is_owner || group.isOwner);
 
           return (
             <div 
               key={gid}
               onClick={() => onSelectGroup(gid)}
-              className="group cursor-pointer bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm hover:shadow-xl border border-slate-100 dark:border-slate-700 transition-all relative overflow-hidden flex flex-col justify-between h-60"
+              className="group cursor-pointer bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm hover:shadow-xl border border-slate-100 dark:border-slate-700 transition-all relative flex flex-col justify-between h-52"
             >
-              {canDelete && (
-                <div className="absolute top-4 right-4 z-30">
-                  <button 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation(); 
-                      console.warn(`🗑️ BOTÓN TACHO: Eliminando ${gid}`);
-                      onDeleteGroup(gid);
-                    }}
-                    className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-2xl transition-all"
-                  >
-                    <TrashIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              )}
-              
-              <div className="relative z-10">
+              <div className="relative z-10 pointer-events-none">
                 <div className="flex justify-between items-start mb-4">
                   <div className="bg-sky-50 dark:bg-sky-900/40 w-14 h-14 rounded-2xl flex items-center justify-center">
                     {group.emoji ? <span className="text-3xl">{group.emoji}</span> : <UsersIcon className="w-7 h-7 text-sky-500" />}
@@ -144,14 +130,13 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({ groups, onCreateGroup, 
                 <h4 className="text-xl font-black text-slate-800 dark:text-white line-clamp-1">{group.name}</h4>
               </div>
 
-              <div className="space-y-4 relative z-10">
-                <div className="flex items-center gap-3">
+              <div className="space-y-4 relative z-10 pointer-events-none">
+                <div className="flex items-center">
                   <div className="flex -space-x-3">
                     {group.users?.slice(0, 3).map((u, i) => (
                       <img key={i} src={getUserAvatar(u)} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800" alt={u.name} />
                     ))}
                   </div>
-                  <span className="text-xs font-bold text-slate-400 uppercase">{memberCount} members</span>
                 </div>
                 <div className="border-t border-slate-50 dark:border-slate-700 pt-3">
                   <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Last Activity: {lastUpdate}</p>

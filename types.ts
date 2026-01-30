@@ -3,23 +3,44 @@ export interface User {
   id: string;
   _id?: string; // Soporte para MongoDB
   name: string;
-  email: string;
+  email?: string;
   picture?: string;
   avatar_url?: string; // Campo adicional para compatibilidad
+}
+
+export interface Settlement {
+  from_user_id: number | string;
+  from_name: string;
+  from_avatar_url?: string;
+  to_user_id: number | string;
+  to_name: string;
+  to_avatar_url?: string;
+  amount: number;
 }
 
 export interface Group {
   id: string;
   _id?: string; // Soporte para MongoDB
   name: string;
-  emoji?: string; // Cambiado de icon a emoji según documentación del backend
-  createdAt: string;
-  updatedAt: string;
-  ownerId: string;
-  is_owner?: boolean; // Flag from backend
-  isOwner?: boolean;  // CamelCase variant
-  users: User[]; // La API devuelve los usuarios del grupo
-  expenses: Expense[]; // La API devuelve los gastos del grupo
+  emoji?: string;
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
+  ownerId?: string;
+  created_by?: number | string;
+  is_owner?: boolean;
+  isOwner?: boolean;
+  
+  // Nuevos campos del backend
+  invite_code?: string;
+  invite_link?: string;
+  total_spent?: number;
+  
+  // Listas de datos
+  users: User[]; // Mapeado de 'members' del backend
+  expenses: Expense[];
+  settlements?: Settlement[]; // Del backend
 }
 
 export interface Expense {
@@ -27,15 +48,19 @@ export interface Expense {
   _id?: string;
   description: string;
   amount: number;
-  paidById: string;
+  
+  // Frontend usa paidById, backend usa payer_id
+  paidById: string; 
+  payer_id?: string | number;
+  payer_name?: string;
+
   participantIds: string[];
+  
+  // Frontend transactionDate, backend date
   transactionDate: string;
+  date?: string;
+  
   uploadDate: string;
   receiptImage?: string;
-}
-
-export interface Settlement {
-  from: string; // User name
-  to: string; // User name
-  amount: number;
+  image_path?: string;
 }

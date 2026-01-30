@@ -1,22 +1,13 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Expense, Group } from './types.ts';
-import UserManagement from './components/UserManagement.tsx';
-import ExpenseForm from './components/ExpenseForm.tsx';
-import ExpenseList from './components/ExpenseList.tsx';
-import Summary from './components/Summary.tsx';
 import AuthScreen from './components/AuthScreen.tsx';
 import GroupDashboard from './components/GroupDashboard.tsx';
+import GroupDetails from './components/GroupDetails.tsx';
 import { Logo } from './components/icons.tsx';
+import { getUserAvatar } from './utils.ts';
 
 const API_BASE_URL = 'https://split-ease-back.onrender.com/api';
-
-export const getUserAvatar = (user?: User | { name: string; picture?: string; avatar_url?: string }) => {
-  if (!user) return `https://api.dicebear.com/7.x/avataaars/svg?seed=unknown`;
-  const photo = user.picture || user.avatar_url;
-  if (photo) return photo;
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name)}&backgroundColor=b6e3f4`;
-};
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('split-ease-token'));
@@ -35,23 +26,6 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const logCurl = (url: string, options: RequestInit) => {
-    const method = options.method || 'GET';
-    const headers = options.headers as Record<string, string> || {};
-    let curl = `curl -X ${method} "${url}"`;
-    
-    Object.entries(headers).forEach(([key, value]) => {
-      curl += ` -H "${key}: ${value}"`;
-    });
-    
-    if (options.body) {
-      curl += ` -d '${options.body}'`;
-    }
-
-    console.warn("🚀 PEGANDO AL BACKEND");
-    console.log("%c" + curl, "color: #0ea5e9; font-family: monospace; font-weight: bold; padding: 6px; background: #0f172a; border-radius: 4px; display: block; margin: 4px 0;");
-  };
-
   const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     const headers: Record<string, string> = {
       ...((options.headers as Record<string, string>) || {}),
@@ -68,7 +42,7 @@ const App: React.FC = () => {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${API_BASE_URL}${cleanEndpoint}`;
     
-    logCurl(url, { ...options, headers });
+    console.log(`📡 ${options.method || 'GET'} ${url}`);
 
     try {
       const response = await fetch(url, { ...options, headers });
@@ -93,9 +67,12 @@ const App: React.FC = () => {
       if (contentType && contentType.includes("application/json")) {
         return await response.json();
       }
+      if (contentType && contentType.startsWith("image/")) {
+        return await response.blob();
+      }
       return null;
     } catch (err: any) {
-      console.error(`❌ Falló la pegada HTTP:`, err.message);
+      console.error(`❌ HTTP Error:`, err.message);
       throw err;
     }
   };
@@ -105,24 +82,89 @@ const App: React.FC = () => {
     setIsSyncing(true);
     try {
       const data = await apiFetch('/groups');
-      setGroups(data || []);
+      if (Array.isArray(data)) {
+        const mappedGroups = data.map(group => ({
+            ...group,
+            id: String(group.id),
+            _id: group._id ? String(group._id) : undefined,
+            users: (group.members || group.users || []).map((user: any) => ({
+                ...user,
+                id: String(user.id)
+            })),
+            expenses: (group.expenses || []).map((exp: any) => ({
+                ...exp,
+                id: String(exp.id)
+            }))
+        }));
+        setGroups(mappedGroups);
+      } else {
+        setGroups([]);
+      }
     } catch (err: any) {
       showToast(err.message, "error");
     } finally { setIsSyncing(false); }
   }, [token]);
 
-  // DERIVACIÓN DE DATOS: Usamos lo que ya bajamos en loadUserGroups
-  const currentGroup = useMemo(() => {
-    return groups.find(g => (g._id || g.id) === groupId);
-  }, [groups, groupId]);
+  const loadGroupData = useCallback(async (id: string) => {
+    if (!token || !id || id === 'null' || id === 'undefined') return;
+    setIsSyncing(true);
+    try {
+       const [data, settlementsResponse, expensesResponse] = await Promise.all([
+        apiFetch(`/groups/${id}`),
+        apiFetch(`/groups/${id}/settlements`),
+        apiFetch(`/groups/${id}/expenses`),
+      ]);
+      
+      const allUserIdsInGroup = (data.members || []).map((user: any) => String(user.id));
+      
+      const mappedGroup: Group = {
+        ...data,
+        id: String(data.id),
+        _id: data._id ? String(data._id) : undefined,
+        users: (data.members || []).map((user: any) => ({
+            ...user,
+            id: String(user.id),
+            _id: user._id ? String(user._id) : undefined,
+        })),
+        expenses: (expensesResponse || []).map((exp: any) => ({
+            description: exp.description,
+            amount: exp.amount,
+            id: String(exp.id),
+            paidById: String(exp.payer_id),
+            payer_name: exp.payer_name,
+            // Fallback for missing participant data
+            participantIds: (exp.participant_ids || allUserIdsInGroup), 
+            transactionDate: exp.date || new Date().toISOString(),
+            uploadDate: exp.date || new Date().toISOString(),
+            receiptImage: exp.image_path ? `${API_BASE_URL.replace('/api', '')}${exp.image_path}` : undefined,
+        })),
+        settlements: settlementsResponse?.settlements || [],
+        total_spent: data.total_spent,
+      };
 
-  const users = useMemo(() => currentGroup?.users || [], [currentGroup]);
-  const expenses = useMemo(() => currentGroup?.expenses || [], [currentGroup]);
+      setGroups(prev => {
+        const exists = prev.some(g => String(g._id || g.id) === id);
+        if (exists) {
+            return prev.map(g => (String(g._id || g.id) === id ? mappedGroup : g));
+        }
+        return [...prev, mappedGroup];
+      });
+      setGroupId(id);
+    } catch (err: any) {
+      console.error("Error loading group:", id, err.message);
+      setGroupId(null);
+      window.location.hash = ''; 
+    } finally { setIsSyncing(false); }
+  }, [token]);
+
+  const currentGroup = useMemo(() => {
+    if (!groupId) return undefined;
+    return groups.find(g => String(g._id || g.id) === groupId);
+  }, [groups, groupId]);
 
   const handleDeleteGroup = useCallback(async (id: string) => {
     if (!token || !id) return;
-    if (!confirm("¿Seguro que querés borrar este grupo?")) return;
-    
+    if (!confirm("Delete this group permanently?")) return;
     setIsSyncing(true);
     try {
       await apiFetch(`/groups/${id}`, { method: 'DELETE' });
@@ -131,10 +173,8 @@ const App: React.FC = () => {
         setGroupId(null);
         window.location.hash = '';
       }
-      showToast("Grupo eliminado");
-    } catch (err: any) { 
-      showToast(err.message, "error"); 
-    }
+      showToast("Group deleted");
+    } catch (err: any) { showToast(err.message, "error"); }
     finally { setIsSyncing(false); }
   }, [token, groupId]);
 
@@ -162,27 +202,22 @@ const App: React.FC = () => {
     setCurrentUser(user);
     localStorage.setItem('split-ease-token', newToken);
     localStorage.setItem('split-ease-user', JSON.stringify(user));
-    // Después del login, nos aseguramos de limpiar el hash para ir al Dashboard
-    window.location.hash = '';
+    window.location.hash = ''; 
   };
 
-  const handleAddUser = async (name: string) => {
+  const handleAddUser = async (email: string) => {
     if (!groupId || !token) return;
     setIsSyncing(true);
     try {
-      const picture = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}&backgroundColor=b6e3f4`;
-      const newUser = await apiFetch(`/groups/${groupId}/users`, {
+      await apiFetch(`/groups/${groupId}/members`, {
         method: 'POST',
-        body: JSON.stringify({ name, picture })
+        body: JSON.stringify({ email })
       });
-      setGroups(prev => prev.map(g => {
-        if ((g._id || g.id) === groupId) {
-          return { ...g, users: [...(g.users || []), newUser] };
-        }
-        return g;
-      }));
-      showToast(`${name} added`);
-    } catch (err: any) { showToast(err.message, "error"); }
+      loadGroupData(groupId);
+      showToast(`Invitation sent to ${email}`);
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
     finally { setIsSyncing(false); }
   };
 
@@ -190,13 +225,8 @@ const App: React.FC = () => {
     if (!groupId || !token) return;
     setIsSyncing(true);
     try {
-      await apiFetch(`/groups/${groupId}/users/${userId}`, { method: 'DELETE' });
-      setGroups(prev => prev.map(g => {
-        if ((g._id || g.id) === groupId) {
-          return { ...g, users: g.users.filter(u => (u.id || u._id) !== userId) };
-        }
-        return g;
-      }));
+      await apiFetch(`/groups/${groupId}/members/${userId}`, { method: 'DELETE' });
+      loadGroupData(groupId);
       showToast("Member removed");
     } catch (err: any) { showToast(err.message, "error"); }
     finally { setIsSyncing(false); }
@@ -206,16 +236,30 @@ const App: React.FC = () => {
     if (!groupId || !token) return;
     setIsSyncing(true);
     try {
-      const newExpense = await apiFetch(`/groups/${groupId}/expenses`, {
+      const payload: any = {
+        group_id: parseInt(groupId, 10),
+        description: expenseData.description,
+        amount: expenseData.amount,
+        payer_id: parseInt(expenseData.paidById, 10),
+        participant_ids: expenseData.participantIds.map(id => parseInt(id, 10)),
+      };
+
+      if (expenseData.transactionDate) {
+        payload.date = expenseData.transactionDate;
+      }
+
+      if (expenseData.receiptImage) {
+        // The previous documentation specified `receipt_image_base64`.
+        // We will assume this is still the correct field for image uploads.
+        payload.receipt_image_base64 = expenseData.receiptImage.split(',')[1];
+      }
+      
+      await apiFetch(`/expenses`, {
         method: 'POST',
-        body: JSON.stringify(expenseData)
+        body: JSON.stringify(payload)
       });
-      setGroups(prev => prev.map(g => {
-        if ((g._id || g.id) === groupId) {
-          return { ...g, expenses: [newExpense, ...(g.expenses || [])] };
-        }
-        return g;
-      }));
+
+      loadGroupData(groupId); 
       showToast("Expense saved");
     } catch (err: any) { showToast(err.message, "error"); }
     finally { setIsSyncing(false); }
@@ -225,16 +269,41 @@ const App: React.FC = () => {
     if (!groupId || !token) return;
     setIsSyncing(true);
     try {
-      await apiFetch(`/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' });
-      setGroups(prev => prev.map(g => {
-        if ((g._id || g.id) === groupId) {
-          return { ...g, expenses: g.expenses.filter(e => (e._id || e.id) !== expenseId) };
-        }
-        return g;
-      }));
+      await apiFetch(`/expenses/${expenseId}`, { method: 'DELETE' });
+      loadGroupData(groupId);
       showToast("Expense deleted");
     } catch (err: any) { showToast(err.message, "error"); }
     finally { setIsSyncing(false); }
+  };
+
+  const handleDownloadReceipt = async (expenseId: string, expenseDescription: string) => {
+    if (!token) return;
+    setIsSyncing(true);
+    try {
+      const blob = await apiFetch(`/expenses/${expenseId}/image`, { method: 'GET' });
+      if (blob instanceof Blob) {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        const extension = blob.type.split('/')[1] || 'jpg';
+        const filename = `receipt-${expenseDescription.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 30)}.${extension}`;
+        link.download = filename;
+        
+        document.body.appendChild(link);
+        link.click();
+        
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        showToast("Receipt downloaded");
+      } else {
+        throw new Error("Could not download receipt. File not found or is not an image.");
+      }
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleCreateGroup = async (name: string, emoji?: string) => {
@@ -252,7 +321,6 @@ const App: React.FC = () => {
     finally { setIsSyncing(false); }
   };
 
-  // ÚNICO MONITOR DE RUTA Y CARGA INICIAL
   useEffect(() => {
     if (!token) return;
     
@@ -260,24 +328,21 @@ const App: React.FC = () => {
       const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
       const gid = hashParams.get('group');
       
-      // Si el gid es inválido o no existe, nos aseguramos de estar en el Dashboard
-      if (gid && gid !== 'null' && gid !== 'undefined' && gid !== '2') {
-        setGroupId(gid);
+      if (gid && gid !== 'null' && gid !== 'undefined') {
+        loadGroupData(gid);
       } else {
         setGroupId(null);
+        loadUserGroups();
         if (window.location.hash.includes('group=')) {
-          window.location.hash = ''; // Limpiamos hash sucio
+          window.location.hash = ''; 
         }
       }
     };
 
-    // Solo traemos todos los grupos, nada más.
-    loadUserGroups();
-
     syncRoute();
     window.addEventListener('hashchange', syncRoute);
     return () => window.removeEventListener('hashchange', syncRoute);
-  }, [token]); // Solo re-ejecuta si cambia el token (login/logout)
+  }, [token, loadGroupData, loadUserGroups]);
 
   if (!token || !currentUser) {
     return <AuthScreen onAuthSuccess={handleAuthSuccess} apiBaseUrl="https://split-ease-back.onrender.com" showToast={showToast} />;
@@ -294,64 +359,69 @@ const App: React.FC = () => {
       )}
 
       <div className="max-w-4xl mx-auto space-y-8">
-        <header className="flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4">
-            <button onClick={handleGoBack} className="hover:scale-110 transition-transform">
-              <Logo className="w-12 h-12" />
-            </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black">Split<span className="text-sky-500">Easy</span></h1>
-                {groupId && <span className="text-slate-300 dark:text-slate-700 font-black">/</span>}
-                {groupId && (
-                  <div className="flex items-center gap-2">
-                    {currentGroup?.emoji && <span className="text-xl">{currentGroup.emoji}</span>}
-                    <span className="text-lg font-bold text-slate-500 truncate max-w-[150px]">{currentGroup?.name || 'Loading...'}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
-                <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                  {isSyncing ? 'Syncing...' : 'Cloud Sync'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="bg-white dark:bg-slate-800 p-1.5 pr-4 rounded-full shadow-sm border border-slate-100 dark:border-slate-700 flex items-center gap-3">
-              <img src={getUserAvatar(currentUser)} className="w-8 h-8 rounded-full border-2 border-sky-500 bg-slate-100" alt="Me" />
-              <span className="text-sm font-bold truncate max-w-[100px]">{currentUser.name}</span>
-            </div>
-            <button onClick={handleLogout} className="p-2.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 transition-all">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
-            </button>
-          </div>
-        </header>
-
+        
+        {/* Renderizado Condicional de Pantallas */}
         {groupId ? (
-          <main className="space-y-8">
-            <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
-              <button onClick={handleGoBack} className="text-sm font-bold text-sky-500 flex items-center gap-1 hover:underline">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
-                Back to my groups
-              </button>
+          /* PANTALLA DE DETALLE (O LOADING) */
+          currentGroup ? (
+            <GroupDetails 
+              group={currentGroup}
+              currentUser={currentUser}
+              onBack={handleGoBack}
+              onAddUser={handleAddUser}
+              onDeleteUser={handleDeleteUser}
+              onAddExpense={handleAddExpense}
+              onDeleteExpense={handleDeleteExpense}
+              onDeleteGroup={handleDeleteGroup}
+              onDownloadReceipt={handleDownloadReceipt}
+              aiStatus="ok"
+              aiDiagnostic={null}
+            />
+          ) : (
+            <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4 animate-pulse">
+               <div className="w-16 h-16 rounded-2xl bg-slate-200 dark:bg-slate-800"></div>
+               <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded"></div>
             </div>
-            <UserManagement users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} hasExpenses={expenses.length > 0} />
-            {users.length >= 2 && <ExpenseForm users={users} onAddExpense={handleAddExpense} aiStatus="ok" aiDiagnostic={null} />}
-            <Summary users={users} expenses={expenses} />
-            <ExpenseList expenses={expenses} users={users} onDeleteExpense={handleDeleteExpense} />
-          </main>
+          )
         ) : (
-          <GroupDashboard 
-            groups={groups} 
-            onCreateGroup={handleCreateGroup} 
-            onDeleteGroup={handleDeleteGroup}
-            onSelectGroup={handleSelectGroup} 
-            isSyncing={isSyncing} 
-            currentUserId={currentUser._id || currentUser.id}
-          />
+          /* PANTALLA DASHBOARD PRINCIPAL */
+          <div className="animate-in fade-in duration-300">
+            {/* Header del Dashboard */}
+            <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+              <div className="flex items-center gap-4">
+                <Logo className="w-12 h-12" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-black">Split<span className="text-sky-500">Easy</span></h1>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
+                      {isSyncing ? 'Syncing...' : 'Connected'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="bg-white dark:bg-slate-800 p-1.5 pr-4 rounded-full shadow-sm border border-slate-100 dark:border-slate-700 flex items-center gap-3">
+                  <img src={getUserAvatar(currentUser)} className="w-8 h-8 rounded-full border-2 border-sky-500 bg-slate-100" alt="Me" />
+                  <span className="text-sm font-bold truncate max-w-[100px]">{currentUser.name}</span>
+                </div>
+                <button onClick={handleLogout} className="p-2.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="http://www.w3.org/2000/svg" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
+                </button>
+              </div>
+            </header>
+
+            <GroupDashboard 
+              groups={groups} 
+              onCreateGroup={handleCreateGroup} 
+              onSelectGroup={handleSelectGroup} 
+              isSyncing={isSyncing} 
+              currentUserId={currentUser._id || currentUser.id}
+            />
+          </div>
         )}
       </div>
     </div>
