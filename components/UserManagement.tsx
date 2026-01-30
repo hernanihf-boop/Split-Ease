@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { User } from '../types.ts';
 import { UserPlusIcon, TrashIcon } from './icons.tsx';
+import { getUserAvatar } from '../App.tsx';
 
 interface UserManagementProps {
   users: User[];
@@ -21,7 +22,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       return;
     }
     if (users.some(user => user.name.toLowerCase() === newUserName.trim().toLowerCase())) {
-        setError('Friend already in the group.');
+        setError('This member is already in the group.');
         return;
     }
     onAddUser(newUserName.trim());
@@ -35,7 +36,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
         <div className="bg-sky-100 dark:bg-sky-900/30 p-2 rounded-lg mr-3">
           <UserPlusIcon className="w-5 h-5 text-sky-500" />
         </div>
-        Group Friends
+        Group Members
       </h2>
       
       <form onSubmit={handleAddUser} className="flex gap-2 mb-6">
@@ -43,7 +44,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
           type="text"
           value={newUserName}
           onChange={(e) => { setNewUserName(e.target.value); if (error) setError(''); }}
-          placeholder="Add a friend's name..."
+          placeholder="Member name..."
           className="flex-grow px-4 py-3 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none transition-all"
         />
         <button
@@ -58,23 +59,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {users.map(user => (
-          <div key={user.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 group hover:border-sky-200 dark:hover:border-sky-900 transition-all">
+          <div key={user.id || user._id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 group hover:border-sky-200 dark:hover:border-sky-900 transition-all">
             <div className="flex items-center gap-3">
-              {user.picture ? (
-                <img src={user.picture} className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 bg-white" alt={user.name} />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-500">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <img src={getUserAvatar(user)} className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 bg-white" alt={user.name} />
               <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{user.name}</span>
             </div>
             
             <button
-              onClick={() => onDeleteUser(user.id)}
+              onClick={() => onDeleteUser(user.id || user._id!)}
               disabled={hasExpenses}
               className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 transition-all disabled:hidden"
-              title="Remove friend"
+              title="Remove member"
             >
               <TrashIcon className="w-4 h-4" />
             </button>
@@ -83,7 +78,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       </div>
       
       {users.length < 2 && (
-        <p className="text-slate-400 text-xs text-center mt-4 italic">Add at least one friend to start splitting expenses.</p>
+        <p className="text-slate-400 text-xs text-center mt-4 italic">Add at least one member to start splitting expenses.</p>
       )}
     </div>
   );

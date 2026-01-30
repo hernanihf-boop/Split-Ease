@@ -1,223 +1,293 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Expense } from './types.ts';
+import { User, Expense, Group } from './types.ts';
 import UserManagement from './components/UserManagement.tsx';
 import ExpenseForm from './components/ExpenseForm.tsx';
 import ExpenseList from './components/ExpenseList.tsx';
 import Summary from './components/Summary.tsx';
+import AuthScreen from './components/AuthScreen.tsx';
+import GroupDashboard from './components/GroupDashboard.tsx';
 import { Logo } from './components/icons.tsx';
-import { GoogleGenAI } from "@google/genai";
+
+const API_BASE_URL = 'https://split-ease-back.onrender.com/api';
+
+export const getUserAvatar = (user?: User | { name: string; picture?: string; avatar_url?: string }) => {
+  if (!user) return `https://api.dicebear.com/7.x/avataaars/svg?seed=unknown`;
+  const photo = user.picture || user.avatar_url;
+  if (photo) return photo;
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name)}&backgroundColor=b6e3f4`;
+};
 
 const App: React.FC = () => {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('split-ease-token'));
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('split-ease-auth');
+    const saved = localStorage.getItem('split-ease-user');
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [users, setUsers] = useState<User[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  
-  const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'error'>('checking');
-  const [onboardingName, setOnboardingName] = useState('');
-  
-  // Generar avatares con expresiones aleatorias únicamente POSITIVAS
-  const randomAvatars = useMemo(() => {
-    const baseSeeds = ['Felix', 'Aneka', 'James', 'Aria', 'Jack', 'Luna', 'Leo', 'Zoe', 'Sasha', 'Milo'];
-    const positiveMoods = [
-      { name: 'happy', params: 'mouth=smile&eyes=happy' },
-      { name: 'confident', params: 'mouth=default&eyes=default&eyebrows=raisedExcited' },
-      { name: 'joyful', params: 'mouth=laughing&eyes=wink' },
-      { name: 'content', params: 'mouth=twinkle&eyes=happy&eyebrows=default' }
-    ];
-
-    // Seleccionar 5 semillas únicas y asignarles un mood positivo aleatorio
-    return [...baseSeeds]
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 5)
-      .map(seed => {
-        const randomMood = positiveMoods[Math.floor(Math.random() * positiveMoods.length)];
-        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&${randomMood.params}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
-      });
-  }, []);
-
-  const [selectedAvatar, setSelectedAvatar] = useState(randomAvatars[0]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
-  };
-
-  const syncWithBackend = useCallback(async (id: string, currentUsers: User[], currentExpenses: Expense[]) => {
-    setIsSyncing(true);
-    try {
-      localStorage.setItem(`group_${id}`, JSON.stringify({ users: currentUsers, expenses: currentExpenses }));
-      await new Promise(r => setTimeout(r, 800));
-    } catch (e) {
-      showToast("Sync Error", "error");
-    } finally {
-      setIsSyncing(false);
-    }
   }, []);
 
-  const loadGroupFromBackend = useCallback(async (id: string) => {
-    setIsSyncing(true);
-    try {
-      const data = localStorage.getItem(`group_${id}`);
-      if (data) {
-        const parsed = JSON.parse(data);
-        setUsers(parsed.users || []);
-        setExpenses(parsed.expenses || []);
-        showToast("Connected to group!");
-      } else {
-        showToast("New shared group initialized");
-      }
-    } catch (e) {
-      showToast("Error loading group", "error");
-    } finally {
-      setIsSyncing(false);
-    }
-  }, []);
-
-  const checkAI = useCallback(async () => {
-    setAiStatus('checking');
-    try {
-      const apiKey = process.env.API_KEY || '';
-      if (!apiKey || apiKey.length < 5) throw new Error("Key missing");
-      const ai = new GoogleGenAI({ apiKey });
-      await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: 'ping',
-        config: { maxOutputTokens: 2, thinkingConfig: { thinkingBudget: 0 } }
-      });
-      setAiStatus('ok');
-    } catch (err) {
-      setAiStatus('error');
-    }
-  }, []);
-
-  useEffect(() => {
-    checkAI();
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.replace('#', ''));
-    const gid = params.get('group');
+  const logCurl = (url: string, options: RequestInit) => {
+    const method = options.method || 'GET';
+    const headers = options.headers as Record<string, string> || {};
+    let curl = `curl -X ${method} "${url}"`;
     
-    if (gid) {
-      setGroupId(gid);
-      loadGroupFromBackend(gid);
-    } else {
-      const lastGid = localStorage.getItem('split-ease-last-group') || `g-${Date.now()}`;
-      setGroupId(lastGid);
-      localStorage.setItem('split-ease-last-group', lastGid);
-      loadGroupFromBackend(lastGid);
-    }
-  }, [checkAI, loadGroupFromBackend]);
-
-  useEffect(() => {
-    if (groupId && users.length > 0) {
-      syncWithBackend(groupId, users, expenses);
-    }
-  }, [users, expenses, groupId, syncWithBackend]);
-
-  useEffect(() => { 
-    if (currentUser) localStorage.setItem('split-ease-auth', JSON.stringify(currentUser));
-  }, [currentUser]);
-
-  const handleOnboarding = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!onboardingName.trim()) return;
-    
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      name: onboardingName.trim(),
-      picture: selectedAvatar
-    };
-    
-    setCurrentUser(newUser);
-    setUsers(prev => {
-      if (prev.find(u => u.name.toLowerCase() === newUser.name.toLowerCase())) return prev;
-      return [newUser, ...prev];
+    Object.entries(headers).forEach(([key, value]) => {
+      curl += ` -H "${key}: ${value}"`;
     });
+    
+    if (options.body) {
+      curl += ` -d '${options.body}'`;
+    }
+
+    console.warn("🚀 PEGANDO AL BACKEND");
+    console.log("%c" + curl, "color: #0ea5e9; font-family: monospace; font-weight: bold; padding: 6px; background: #0f172a; border-radius: 4px; display: block; margin: 4px 0;");
   };
 
-  const handleShareGroup = () => {
+  const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
+    const headers: Record<string, string> = {
+      ...((options.headers as Record<string, string>) || {}),
+    };
+
+    if (options.body && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${API_BASE_URL}${cleanEndpoint}`;
+    
+    logCurl(url, { ...options, headers });
+
     try {
-      const baseUrl = `https://${window.location.host}${window.location.pathname}`;
-      const shareUrl = `${baseUrl}#group=${groupId}`;
+      const response = await fetch(url, { ...options, headers });
       
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        showToast('Invite link copied!');
-      }).catch(err => {
-        prompt('Copy this invite link:', shareUrl);
-      });
-    } catch (e) {
-      showToast('Error generating link', 'error');
+      if (response.status === 401) { 
+        handleLogout(); 
+        throw new Error("Session expired"); 
+      }
+
+      if (!response.ok) {
+        let errorMsg = `Error: ${response.status}`;
+        try { 
+          const errData = await response.json(); 
+          errorMsg = errData.error || errData.message || errorMsg; 
+        } catch (e) { }
+        throw new Error(errorMsg);
+      }
+
+      if (response.status === 204) return null;
+      
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return await response.json();
+      }
+      return null;
+    } catch (err: any) {
+      console.error(`❌ Falló la pegada HTTP:`, err.message);
+      throw err;
     }
   };
 
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
-        <div className="max-w-md w-full space-y-8 animate-in fade-in zoom-in duration-500">
-          <Logo className="w-24 h-24 mx-auto relative shadow-2xl rounded-3xl" />
-          <h1 className="text-4xl font-black text-white tracking-tight">Split<span className="text-sky-400">Ease</span></h1>
-          <p className="text-slate-400 -mt-4 font-medium italic">Your group expenses, perfectly balanced.</p>
-          
-          <form onSubmit={handleOnboarding} className="space-y-6 bg-slate-800/50 p-8 rounded-3xl border border-slate-700 backdrop-blur-sm shadow-xl">
-            <div className="space-y-4">
-               <label className="text-xs font-bold text-sky-400 uppercase tracking-widest block text-center">Select your profile</label>
-               <div className="flex justify-center gap-4 mb-4 flex-wrap">
-                {randomAvatars.map((avatar, idx) => (
-                  <button 
-                    key={`${avatar}-${idx}`} 
-                    type="button" 
-                    onClick={() => setSelectedAvatar(avatar)} 
-                    className={`w-14 h-14 rounded-full border-4 transition-all duration-300 transform ${selectedAvatar === avatar ? 'border-sky-500 scale-125 shadow-lg shadow-sky-500/20 z-10' : 'border-transparent opacity-40 hover:opacity-80'}`}
-                  >
-                    <img 
-                      src={avatar} 
-                      alt="Avatar" 
-                      className="w-full h-full rounded-full bg-slate-700"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=fallback-${idx}&mouth=smile&eyes=happy`;
-                      }}
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <input 
-                autoFocus 
-                type="text" 
-                value={onboardingName} 
-                onChange={(e) => setOnboardingName(e.target.value)} 
-                placeholder="What is your name?" 
-                className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-center font-bold focus:ring-2 focus:ring-sky-500 outline-none transition-all placeholder:text-slate-600" 
-              />
-            </div>
-            
-            <button 
-              type="submit" 
-              disabled={!onboardingName.trim()}
-              className="w-full bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white font-black p-4 rounded-xl shadow-lg transition-all active:scale-95"
-            >
-              Start Splitting
-            </button>
-          </form>
-        </div>
-      </div>
-    );
+  const loadUserGroups = useCallback(async () => {
+    if (!token) return;
+    setIsSyncing(true);
+    try {
+      const data = await apiFetch('/groups');
+      setGroups(data || []);
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally { setIsSyncing(false); }
+  }, [token]);
+
+  // DERIVACIÓN DE DATOS: Usamos lo que ya bajamos en loadUserGroups
+  const currentGroup = useMemo(() => {
+    return groups.find(g => (g._id || g.id) === groupId);
+  }, [groups, groupId]);
+
+  const users = useMemo(() => currentGroup?.users || [], [currentGroup]);
+  const expenses = useMemo(() => currentGroup?.expenses || [], [currentGroup]);
+
+  const handleDeleteGroup = useCallback(async (id: string) => {
+    if (!token || !id) return;
+    if (!confirm("¿Seguro que querés borrar este grupo?")) return;
+    
+    setIsSyncing(true);
+    try {
+      await apiFetch(`/groups/${id}`, { method: 'DELETE' });
+      setGroups(prev => prev.filter(g => (g._id || g.id) !== id));
+      if (groupId === id) {
+        setGroupId(null);
+        window.location.hash = '';
+      }
+      showToast("Grupo eliminado");
+    } catch (err: any) { 
+      showToast(err.message, "error"); 
+    }
+    finally { setIsSyncing(false); }
+  }, [token, groupId]);
+
+  const handleSelectGroup = (id: string) => {
+    if (!id) return;
+    window.location.hash = `group=${id}`;
+  };
+
+  const handleGoBack = () => {
+    window.location.hash = '';
+  };
+
+  const handleLogout = () => {
+    setToken(null);
+    setCurrentUser(null);
+    setGroupId(null);
+    setGroups([]);
+    localStorage.removeItem('split-ease-token');
+    localStorage.removeItem('split-ease-user');
+    window.location.hash = ''; 
+  };
+
+  const handleAuthSuccess = (newToken: string, user: User) => {
+    setToken(newToken);
+    setCurrentUser(user);
+    localStorage.setItem('split-ease-token', newToken);
+    localStorage.setItem('split-ease-user', JSON.stringify(user));
+    // Después del login, nos aseguramos de limpiar el hash para ir al Dashboard
+    window.location.hash = '';
+  };
+
+  const handleAddUser = async (name: string) => {
+    if (!groupId || !token) return;
+    setIsSyncing(true);
+    try {
+      const picture = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}&backgroundColor=b6e3f4`;
+      const newUser = await apiFetch(`/groups/${groupId}/users`, {
+        method: 'POST',
+        body: JSON.stringify({ name, picture })
+      });
+      setGroups(prev => prev.map(g => {
+        if ((g._id || g.id) === groupId) {
+          return { ...g, users: [...(g.users || []), newUser] };
+        }
+        return g;
+      }));
+      showToast(`${name} added`);
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setIsSyncing(false); }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!groupId || !token) return;
+    setIsSyncing(true);
+    try {
+      await apiFetch(`/groups/${groupId}/users/${userId}`, { method: 'DELETE' });
+      setGroups(prev => prev.map(g => {
+        if ((g._id || g.id) === groupId) {
+          return { ...g, users: g.users.filter(u => (u.id || u._id) !== userId) };
+        }
+        return g;
+      }));
+      showToast("Member removed");
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setIsSyncing(false); }
+  };
+
+  const handleAddExpense = async (expenseData: Omit<Expense, 'id'>) => {
+    if (!groupId || !token) return;
+    setIsSyncing(true);
+    try {
+      const newExpense = await apiFetch(`/groups/${groupId}/expenses`, {
+        method: 'POST',
+        body: JSON.stringify(expenseData)
+      });
+      setGroups(prev => prev.map(g => {
+        if ((g._id || g.id) === groupId) {
+          return { ...g, expenses: [newExpense, ...(g.expenses || [])] };
+        }
+        return g;
+      }));
+      showToast("Expense saved");
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setIsSyncing(false); }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!groupId || !token) return;
+    setIsSyncing(true);
+    try {
+      await apiFetch(`/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' });
+      setGroups(prev => prev.map(g => {
+        if ((g._id || g.id) === groupId) {
+          return { ...g, expenses: g.expenses.filter(e => (e._id || e.id) !== expenseId) };
+        }
+        return g;
+      }));
+      showToast("Expense deleted");
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setIsSyncing(false); }
+  };
+
+  const handleCreateGroup = async (name: string, emoji?: string) => {
+    if (!token) return;
+    setIsSyncing(true);
+    try {
+      const data = await apiFetch('/groups', { 
+        method: 'POST',
+        body: JSON.stringify({ name, emoji }) 
+      });
+      setGroups(prev => [data, ...prev]);
+      handleSelectGroup(data._id || data.id);
+      showToast(`Group "${name}" created`);
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setIsSyncing(false); }
+  };
+
+  // ÚNICO MONITOR DE RUTA Y CARGA INICIAL
+  useEffect(() => {
+    if (!token) return;
+    
+    const syncRoute = () => {
+      const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
+      const gid = hashParams.get('group');
+      
+      // Si el gid es inválido o no existe, nos aseguramos de estar en el Dashboard
+      if (gid && gid !== 'null' && gid !== 'undefined' && gid !== '2') {
+        setGroupId(gid);
+      } else {
+        setGroupId(null);
+        if (window.location.hash.includes('group=')) {
+          window.location.hash = ''; // Limpiamos hash sucio
+        }
+      }
+    };
+
+    // Solo traemos todos los grupos, nada más.
+    loadUserGroups();
+
+    syncRoute();
+    window.addEventListener('hashchange', syncRoute);
+    return () => window.removeEventListener('hashchange', syncRoute);
+  }, [token]); // Solo re-ejecuta si cambia el token (login/logout)
+
+  if (!token || !currentUser) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} apiBaseUrl="https://split-ease-back.onrender.com" showToast={showToast} />;
   }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 p-4 sm:p-8 pb-24">
       {toast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
-          <div className="px-6 py-3 bg-white dark:bg-slate-800 text-sky-500 rounded-2xl shadow-2xl font-bold border border-sky-100 dark:border-sky-900/30">
+          <div className={`px-6 py-3 rounded-2xl shadow-2xl font-bold border ${toast.type === 'error' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-white dark:bg-slate-800 text-sky-500 border-sky-100 dark:border-sky-900/30'}`}>
             {toast.message}
           </div>
         </div>
@@ -226,54 +296,63 @@ const App: React.FC = () => {
       <div className="max-w-4xl mx-auto space-y-8">
         <header className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4">
-            <Logo className="w-12 h-12" />
+            <button onClick={handleGoBack} className="hover:scale-110 transition-transform">
+              <Logo className="w-12 h-12" />
+            </button>
             <div>
-              <h1 className="text-2xl font-black">Split<span className="text-sky-500">Ease</span></h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black">Split<span className="text-sky-500">Easy</span></h1>
+                {groupId && <span className="text-slate-300 dark:text-slate-700 font-black">/</span>}
+                {groupId && (
+                  <div className="flex items-center gap-2">
+                    {currentGroup?.emoji && <span className="text-xl">{currentGroup.emoji}</span>}
+                    <span className="text-lg font-bold text-slate-500 truncate max-w-[150px]">{currentGroup?.name || 'Loading...'}</span>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
                 <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                  {isSyncing ? 'Syncing...' : 'Connected'}
+                  {isSyncing ? 'Syncing...' : 'Cloud Sync'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="bg-white dark:bg-slate-800 p-1.5 pr-4 rounded-full shadow-sm border border-slate-100 dark:border-slate-700 flex items-center gap-3">
-              <img 
-                src={currentUser.picture} 
-                className="w-8 h-8 rounded-full border-2 border-sky-500" 
-                alt="Me" 
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.name}&mouth=smile&eyes=happy`;
-                }}
-              />
-              <span className="text-sm font-bold">{currentUser.name}</span>
+              <img src={getUserAvatar(currentUser)} className="w-8 h-8 rounded-full border-2 border-sky-500 bg-slate-100" alt="Me" />
+              <span className="text-sm font-bold truncate max-w-[100px]">{currentUser.name}</span>
             </div>
-            <button onClick={handleShareGroup} className="p-2.5 bg-sky-500 text-white rounded-full hover:bg-sky-600 shadow-lg" title="Invite Friends">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" /></svg>
+            <button onClick={handleLogout} className="p-2.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500 transition-all">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" /></svg>
             </button>
           </div>
         </header>
 
-        <main className="space-y-8">
-          <UserManagement 
-            users={users} 
-            onAddUser={(name) => setUsers(prev => [...prev, { id: `user-${Date.now()}`, name }])} 
-            onDeleteUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))} 
-            hasExpenses={expenses.length > 0} 
+        {groupId ? (
+          <main className="space-y-8">
+            <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
+              <button onClick={handleGoBack} className="text-sm font-bold text-sky-500 flex items-center gap-1 hover:underline">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+                Back to my groups
+              </button>
+            </div>
+            <UserManagement users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} hasExpenses={expenses.length > 0} />
+            {users.length >= 2 && <ExpenseForm users={users} onAddExpense={handleAddExpense} aiStatus="ok" aiDiagnostic={null} />}
+            <Summary users={users} expenses={expenses} />
+            <ExpenseList expenses={expenses} users={users} onDeleteExpense={handleDeleteExpense} />
+          </main>
+        ) : (
+          <GroupDashboard 
+            groups={groups} 
+            onCreateGroup={handleCreateGroup} 
+            onDeleteGroup={handleDeleteGroup}
+            onSelectGroup={handleSelectGroup} 
+            isSyncing={isSyncing} 
+            currentUserId={currentUser._id || currentUser.id}
           />
-          {users.length >= 2 && (
-            <ExpenseForm 
-              users={users} 
-              onAddExpense={(exp) => setExpenses(prev => [{...exp, id: `exp-${Date.now()}`}, ...prev])} 
-              aiStatus={aiStatus} 
-              aiDiagnostic={null} 
-            />
-          )}
-          <Summary users={users} expenses={expenses} />
-          <ExpenseList expenses={expenses} users={users} onDeleteExpense={(id) => setExpenses(prev => prev.filter(e => e.id !== id))} />
-        </main>
+        )}
       </div>
     </div>
   );
