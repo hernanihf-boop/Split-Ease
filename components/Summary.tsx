@@ -16,22 +16,26 @@ const Summary: React.FC<SummaryProps> = ({ users, expenses, backendSettlements }
   const settlements = backendSettlements || [];
 
   const handleDownloadXLSX = () => {
+    if (expenses.length === 0 && settlements.length === 0) return;
+
     const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
 
     // Create workbook
     const wb = XLSX.utils.book_new();
 
     // Prepare data for "Detailed Expenses" sheet
-    const expenseHeaders = ['Date', 'Description', 'Amount', 'Paid By', 'Split With'];
-    const expenseData = [...expenses].reverse().map(e => [
-        new Date(e.transactionDate).toLocaleString(),
-        e.description,
-        e.amount,
-        users.find(u => u.id === e.paidById)?.name || e.payer_name || 'Unknown',
-        e.participantIds.map(getUserName).join('; ')
-    ]);
-    const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseData]);
-    XLSX.utils.book_append_sheet(wb, expenseSheet, "Expenses");
+    if (expenses.length > 0) {
+      const expenseHeaders = ['Date', 'Description', 'Amount', 'Paid By', 'Split With'];
+      const expenseData = [...expenses].reverse().map(e => [
+          new Date(e.transactionDate).toLocaleString(),
+          e.description,
+          e.amount,
+          users.find(u => u.id === e.paidById)?.name || e.payer_name || 'Unknown',
+          e.participantIds.map(getUserName).join('; ')
+      ]);
+      const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseData]);
+      XLSX.utils.book_append_sheet(wb, expenseSheet, "Expenses");
+    }
 
     // Prepare data for "Settlement Summary" sheet
     if (settlements.length > 0) {
@@ -48,6 +52,15 @@ const Summary: React.FC<SummaryProps> = ({ users, expenses, backendSettlements }
     const date = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `SplitEasy_Report_${date}.xlsx`);
   };
+
+  if (expenses.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+        <p className="text-slate-400 font-medium">No expenses recorded yet.</p>
+        <p className="text-slate-400 text-xs mt-1">Once you add expenses, balances will appear here.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 space-y-6">

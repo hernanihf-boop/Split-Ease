@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Group, User, Expense } from '../types.ts';
 import UserManagement from './UserManagement.tsx';
@@ -102,7 +101,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({
                 <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Spent</p>
                     <p className="text-4xl font-black text-slate-800 dark:text-white">
-                        ${(group.total_spent ?? group.expenses.reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}
+                        ${(group.total_spent || group.expenses.reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}
                     </p>
                 </div>
 

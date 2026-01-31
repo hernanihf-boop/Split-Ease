@@ -12,23 +12,21 @@ const API_BASE_URL = 'https://split-ease-back.onrender.com/api';
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('split-ease-token'));
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem('split-ease-user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    const saved = localStorage.getItem('split-ease-user');
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(() => localStorage.getItem('split-ease-invite-code'));
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const apiFetch = async (endpoint: string, options: RequestInit = {}, overrideToken?: string) => {
-    const currentToken = overrideToken || token;
+  const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     const headers: Record<string, string> = {
       ...((options.headers as Record<string, string>) || {}),
     };
@@ -37,8 +35,8 @@ const App: React.FC = () => {
       headers['Content-Type'] = 'application/json';
     }
     
-    if (currentToken) {
-      headers['Authorization'] = `Bearer ${currentToken}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
     
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -105,7 +103,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       showToast(err.message, "error");
     } finally { setIsSyncing(false); }
-  }, [token, showToast]);
+  }, [token]);
 
   const loadGroupData = useCallback(async (id: string) => {
     if (!token || !id || id === 'null' || id === 'undefined') return;
@@ -134,6 +132,7 @@ const App: React.FC = () => {
             id: String(exp.id),
             paidById: String(exp.payer_id),
             payer_name: exp.payer_name,
+            // Fallback for missing participant data
             participantIds: (exp.participant_ids || allUserIdsInGroup), 
             transactionDate: exp.date || new Date().toISOString(),
             uploadDate: exp.date || new Date().toISOString(),
@@ -156,29 +155,7 @@ const App: React.FC = () => {
       setGroupId(null);
       window.location.hash = ''; 
     } finally { setIsSyncing(false); }
-  }, [token, showToast]);
-  
-  const handleJoinGroup = async (inviteCode: string, newToken: string) => {
-    if (!newToken) return null;
-    setIsSyncing(true);
-    try {
-      const result = await apiFetch('/groups/join', {
-        method: 'POST',
-        body: JSON.stringify({ invite_code: inviteCode }),
-      }, newToken);
-      localStorage.removeItem('split-ease-invite-code');
-      setPendingInviteCode(null);
-      showToast(`Successfully joined group: ${result.name}!`);
-      return result._id || result.id;
-    } catch (err: any) {
-      showToast(err.message, 'error');
-      localStorage.removeItem('split-ease-invite-code');
-      setPendingInviteCode(null);
-      return null;
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  }, [token]);
 
   const currentGroup = useMemo(() => {
     if (!groupId) return undefined;
@@ -199,7 +176,7 @@ const App: React.FC = () => {
       showToast("Group deleted");
     } catch (err: any) { showToast(err.message, "error"); }
     finally { setIsSyncing(false); }
-  }, [token, groupId, showToast]);
+  }, [token, groupId]);
 
   const handleSelectGroup = (id: string) => {
     if (!id) return;
@@ -217,27 +194,15 @@ const App: React.FC = () => {
     setGroups([]);
     localStorage.removeItem('split-ease-token');
     localStorage.removeItem('split-ease-user');
-    localStorage.removeItem('split-ease-invite-code');
     window.location.hash = ''; 
   };
-  
-  const handleAuthSuccess = async (newToken: string, user: User) => {
-    localStorage.setItem('split-ease-token', newToken);
-    localStorage.setItem('split-ease-user', JSON.stringify(user));
+
+  const handleAuthSuccess = (newToken: string, user: User) => {
     setToken(newToken);
     setCurrentUser(user);
-
-    const inviteCode = localStorage.getItem('split-ease-invite-code');
-    if (inviteCode) {
-      const joinedGroupId = await handleJoinGroup(inviteCode, newToken);
-      if (joinedGroupId) {
-        handleSelectGroup(joinedGroupId);
-      } else {
-        window.location.hash = '';
-      }
-    } else {
-      window.location.hash = '';
-    }
+    localStorage.setItem('split-ease-token', newToken);
+    localStorage.setItem('split-ease-user', JSON.stringify(user));
+    window.location.hash = ''; 
   };
 
   const handleAddUser = async (email: string) => {
@@ -284,6 +249,8 @@ const App: React.FC = () => {
       }
 
       if (expenseData.receiptImage) {
+        // The previous documentation specified `receipt_image_base64`.
+        // We will assume this is still the correct field for image uploads.
         payload.receipt_image_base64 = expenseData.receiptImage.split(',')[1];
       }
       
@@ -355,24 +322,19 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!token) return;
+    
     const syncRoute = () => {
       const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
       const gid = hashParams.get('group');
       
-      if (token) {
-        if (gid && gid !== 'null' && gid !== 'undefined') {
-          loadGroupData(gid);
-        } else {
-          setGroupId(null);
-          loadUserGroups();
-        }
+      if (gid && gid !== 'null' && gid !== 'undefined') {
+        loadGroupData(gid);
       } else {
-        // Not logged in, check for invite link to save it
-        if (gid) {
-          localStorage.setItem('split-ease-invite-code', gid);
-          setPendingInviteCode(gid);
-          // Clean the URL for the user
-          window.history.replaceState(null, '', window.location.pathname);
+        setGroupId(null);
+        loadUserGroups();
+        if (window.location.hash.includes('group=')) {
+          window.location.hash = ''; 
         }
       }
     };
@@ -383,12 +345,7 @@ const App: React.FC = () => {
   }, [token, loadGroupData, loadUserGroups]);
 
   if (!token || !currentUser) {
-    return <AuthScreen 
-              onAuthSuccess={handleAuthSuccess} 
-              apiBaseUrl="https://split-ease-back.onrender.com" 
-              showToast={showToast}
-              inviteCode={pendingInviteCode}
-            />;
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} apiBaseUrl="https://split-ease-back.onrender.com" showToast={showToast} />;
   }
 
   return (
@@ -403,7 +360,9 @@ const App: React.FC = () => {
 
       <div className="max-w-4xl mx-auto space-y-8">
         
+        {/* Renderizado Condicional de Pantallas */}
         {groupId ? (
+          /* PANTALLA DE DETALLE (O LOADING) */
           currentGroup ? (
             <GroupDetails 
               group={currentGroup}
@@ -425,7 +384,9 @@ const App: React.FC = () => {
             </div>
           )
         ) : (
+          /* PANTALLA DASHBOARD PRINCIPAL */
           <div className="animate-in fade-in duration-300">
+            {/* Header del Dashboard */}
             <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
               <div className="flex items-center gap-4">
                 <Logo className="w-12 h-12" />
