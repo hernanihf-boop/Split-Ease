@@ -65,22 +65,22 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onDel
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {users.map(user => (
-          <div key={user.id || user._id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 group hover:border-sky-200 dark:hover:border-sky-900 transition-all">
-            <div className="flex items-center gap-3">
-              <img src={getUserAvatar(user)} className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 bg-white" alt={user.name} />
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{user.name}</span>
+            <div key={user.id || user._id!} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 group hover:border-sky-200 dark:hover:border-sky-900 transition-all">
+              <div className="flex items-center gap-3">
+                <img src={getUserAvatar(user)} className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 bg-white" alt={user.name} />
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{user.name}</span>
+              </div>
+              
+              <button
+                onClick={() => onDeleteUser(user.id || user._id!)}
+                disabled={hasExpenses}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 transition-all disabled:hidden"
+                title="Remove member"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
             </div>
-            
-            <button
-              onClick={() => onDeleteUser(user.id || user._id!)}
-              disabled={hasExpenses}
-              className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 transition-all disabled:hidden"
-              title="Remove member"
-            >
-              <TrashIcon className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+          ))}
       </div>
       
       {users.length < 2 && (

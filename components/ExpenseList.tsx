@@ -73,7 +73,6 @@ const ExpenseItem: React.FC<{
 };
 
 const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, users, onDeleteExpense, onDownloadReceipt }) => {
-  if (expenses.length === 0) return null;
   const sortedExpenses = [...expenses].sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
   return (
     <div className="space-y-4">
@@ -81,7 +80,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, users, onDeleteExpe
       <div className="space-y-3">
         {sortedExpenses.map(expense => (
           <ExpenseItem 
-            key={expense.id || expense._id} 
+            key={expense.id || expense._id!} 
             expense={expense} 
             users={users} 
             onDeleteExpense={onDeleteExpense} 

@@ -1,7 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Expense } from '../types.ts';
 import { CameraIcon, TrashIcon, SparklesIcon, PencilIcon, PhotographIcon } from './icons.tsx';
-import { GoogleGenAI, Type } from "@google/genai";
 
 interface ExpenseFormProps {
   users: User[];
@@ -89,44 +89,26 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
     setAiError(null);
     
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey || apiKey === "YOUR_API_KEY" || apiKey.length < 10) {
-        throw new Error("CONFIG_ERROR: API_KEY is missing or invalid.");
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
       const base64Data = base64ImageWithMime.split(',')[1];
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
-            },
-            {
-              text: "Analyze this receipt and extract: the merchant name (merchantName), the total amount (totalAmount), and the date (transactionDate in YYYY-MM-DD format).",
-            },
-          ],
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              merchantName: { type: Type.STRING },
-              totalAmount: { type: Type.NUMBER },
-              transactionDate: { type: Type.STRING },
-            },
-            required: ["merchantName", "totalAmount"],
-          },
-        },
+      
+      // The serverless function can be on Netlify or Vercel, mapped to /api/gemini
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64Image: base64Data,
+          mimeType: mimeType,
+        }),
       });
 
-      const resultText = response.text;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `API Error: ${response.statusText}` }));
+        throw new Error(errorData.error || `API Error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      // The backend function wraps the Gemini response text in a 'text' property
+      const resultText = result.text;
       if (!resultText) throw new Error("API_EMPTY_RESPONSE: AI did not return content.");
       
       const parsedData = JSON.parse(resultText);
@@ -135,23 +117,22 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
       setAmount(parsedData.totalAmount ? Number(parsedData.totalAmount).toFixed(2) : '');
       
       if (parsedData.transactionDate) {
-          const d = new Date(parsedData.transactionDate);
-          if (!isNaN(d.getTime())) {
-            setExtractedTransactionDate(d.toISOString());
-          }
+        const d = new Date(parsedData.transactionDate);
+        // Validate date, as AI might return weird strings
+        if (!isNaN(d.getTime())) {
+          setExtractedTransactionDate(d.toISOString());
+        } else {
+          setExtractedTransactionDate(new Date().toISOString());
+        }
       } else {
         setExtractedTransactionDate(new Date().toISOString());
       }
     } catch (err: any) {
       console.error("AI Error:", err);
-      let displayError = "Error connecting to AI.";
+      let displayError = "Error connecting to AI function.";
       
-      if (err.message?.includes("CONFIG_ERROR")) {
-        displayError = err.message;
-      } else if (err.message?.includes("API_KEY_INVALID") || err.status === 403) {
-        displayError = "Error: Gemini API Key is invalid or expired.";
-      } else if (err.status === 429) {
-        displayError = "Error: AI rate limit exceeded. Please try again in a moment.";
+      if (err.message?.includes("API Error")) {
+        displayError = `Error: The AI server is not responding. ${err.message}`;
       } else {
         displayError = `Error detail: ${err.message || "Unknown scanning error"}`;
       }
@@ -312,7 +293,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
                   className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all disabled:opacity-50"
                   disabled={aiIsLoading}
                 >
-                  {users.map(u => <option key={u.id || u._id} value={u.id || u._id}>{u.name}</option>)}
+                  {users.map(u => (
+                    <option key={u.id || u._id!} value={u.id || u._id!}>{u.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -321,16 +304,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Who participates?</label>
               <div className="flex flex-wrap gap-2">
                 {users.map(user => {
-                  const uid = user.id || user._id!;
-                  const isChecked = participantIds.includes(uid);
+                  const userId = user.id || user._id!;
+                  const isChecked = participantIds.includes(userId);
                   return (
                     <button
-                      key={uid}
+                      key={userId}
                       type="button"
                       disabled={aiIsLoading}
                       onClick={() => {
                         setParticipantIds(prev => 
-                          isChecked ? prev.filter(id => id !== uid) : [...prev, uid]
+                          isChecked ? prev.filter(id => id !== userId) : [...prev, userId]
                         );
                       }}
                       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
