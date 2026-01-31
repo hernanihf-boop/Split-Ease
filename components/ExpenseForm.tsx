@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Expense } from '../types.ts';
 import { CameraIcon, TrashIcon, SparklesIcon, PencilIcon, PhotographIcon } from './icons.tsx';
@@ -5,13 +6,12 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 interface ExpenseFormProps {
   users: User[];
-  currentUser: User;
   onAddExpense: (expense: Omit<Expense, 'id'>) => void;
   aiStatus: 'checking' | 'ok' | 'error';
   aiDiagnostic: string | null;
 }
 
-const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpense, aiStatus, aiDiagnostic }) => {
+const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, onAddExpense, aiStatus, aiDiagnostic }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [paidById, setPaidById] = useState('');
@@ -26,21 +26,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Seleccionar al usuario actual como pagador por defecto al cargar
   useEffect(() => {
     if (users.length > 0 && !paidById) {
-      const me = users.find(u => String(u.id || u._id) === String(currentUser.id || currentUser._id));
-      if (me) {
-        setPaidById(me.id || me._id!);
-      } else {
-        setPaidById(users[0].id || users[0]._id!);
-      }
+      setPaidById(users[0].id);
     }
-  }, [users, paidById, currentUser]);
+  }, [users, paidById]);
 
   useEffect(() => {
     if ((receiptImage || isManualMode) && participantIds.length === 0) {
-      setParticipantIds(users.map(u => u.id || u._id!));
+      setParticipantIds(users.map(u => u.id));
     }
   }, [receiptImage, isManualMode, users]);
 
@@ -57,12 +51,8 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
     if (cameraInputRef.current) cameraInputRef.current.value = '';
     if (galleryInputRef.current) galleryInputRef.current.value = '';
     
-    // Al resetear, volver a poner al usuario actual como pagador
-    const me = users.find(u => String(u.id || u._id) === String(currentUser.id || currentUser._id));
-    if (me) {
-      setPaidById(me.id || me._id!);
-    } else if (users.length > 0) {
-      setPaidById(users[0].id || users[0]._id!);
+    if (users.length > 0) {
+        setPaidById(users[0].id);
     }
   };
   
@@ -312,7 +302,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
                   className="w-full p-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-sky-500 outline-none transition-all disabled:opacity-50"
                   disabled={aiIsLoading}
                 >
-                  {users.map(u => <option key={u.id || u._id} value={u.id || u._id}>{u.name}</option>)}
+                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
             </div>
@@ -321,16 +311,15 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ users, currentUser, onAddExpe
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Who participates?</label>
               <div className="flex flex-wrap gap-2">
                 {users.map(user => {
-                  const uid = user.id || user._id!;
-                  const isChecked = participantIds.includes(uid);
+                  const isChecked = participantIds.includes(user.id);
                   return (
                     <button
-                      key={uid}
+                      key={user.id}
                       type="button"
                       disabled={aiIsLoading}
                       onClick={() => {
                         setParticipantIds(prev => 
-                          isChecked ? prev.filter(id => id !== uid) : [...prev, uid]
+                          isChecked ? prev.filter(id => id !== user.id) : [...prev, user.id]
                         );
                       }}
                       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${

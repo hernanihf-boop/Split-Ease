@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
 import { Group, User, Expense } from '../types.ts';
 import UserManagement from './UserManagement.tsx';
 import ExpenseForm from './ExpenseForm.tsx';
 import ExpenseList from './ExpenseList.tsx';
 import Summary from './Summary.tsx';
+import { getUserAvatar } from '../utils.ts';
 import { TrashIcon } from './icons.tsx';
 
 interface GroupDetailsProps {
@@ -57,7 +59,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({
       <div className="flex items-center justify-between mb-6">
         <button onClick={onBack} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-sky-500 transition-colors group">
           <div className="p-2 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-slate-100 dark:border-slate-700 group-hover:border-sky-200">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="http://www.w3.org/2000/svg" fill="currentColor">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
             </svg>
           </div>
@@ -149,7 +151,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({
                 {group.users.length >= 2 ? (
                     <ExpenseForm 
                         users={group.users} 
-                        currentUser={currentUser}
                         onAddExpense={onAddExpense} 
                         aiStatus={aiStatus} 
                         aiDiagnostic={aiDiagnostic} 
